@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Cronómetro de Lectura</title>
-  
+
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" type="image/png" href="./icon.png">
   <link rel="apple-touch-icon" href="./icon.png">
-  
+
   <meta name="theme-color" content="#121318">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -18,10 +18,41 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background-color: #121318; }
     iframe { width: 100%; height: 100%; border: none; }
+    p { color: #e1e2e6; font-family: sans-serif; padding: 24px; line-height: 1.5; }
   </style>
 </head>
 <body>
-  <!-- REEMPLAZA LA URL DE ABAJO POR EL ENLACE DE TU WEB APP EN GOOGLE APPS SCRIPT -->
-  <iframe src="https://script.google.com/macros/s/AKfycbyhOkueNrs1GuQJsleJkdqlbbgy0TYWNNec1L89GSScSqiXcIgCo1SONx4-LpYboOhX_Q/exec" allow="autoplay"></iframe>
+  <iframe id="app"></iframe>
+
+  <script>
+    // La direccion de la aplicacion de Apps Script ya NO esta escrita en este archivo publico.
+    // Se pide una sola vez en cada dispositivo y se guarda ahi.
+    const CLAVE = 'direccionAppsScript';
+    const params = new URLSearchParams(location.search);
+
+    function valida(u) {
+      return /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(u || '');
+    }
+
+    // ?reset=1 borra la direccion guardada (por si te equivocaste o cambia la implementacion)
+    if (params.get('reset')) localStorage.removeItem(CLAVE);
+
+    let url = localStorage.getItem(CLAVE);
+    if (!valida(url)) {
+      url = (prompt('Pega la dirección de tu aplicación (termina en /exec):') || '').trim();
+      if (valida(url)) {
+        localStorage.setItem(CLAVE, url);
+      } else {
+        url = null;
+        document.body.innerHTML = '<p>Falta la dirección de la aplicación.<br>Recarga la página y pégala completa (termina en /exec).</p>';
+      }
+    }
+
+    if (url) {
+      // Si se abre con ?libro=Titulo, se lo pasa a la aplicacion
+      const libro = params.get('libro');
+      document.getElementById('app').src = url + (libro ? '?libro=' + encodeURIComponent(libro) : '');
+    }
+  </script>
 </body>
 </html>
