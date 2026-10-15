@@ -56,13 +56,17 @@
         document.body.innerHTML = '<p>Falta la dirección de la aplicación.<br>Recarga la página y pégala completa (termina en /exec).</p>';
       }
     }
-document.getElementById('app').addEventListener('load', function () {
-  document.getElementById('splash').classList.add('oculto');
-});
     if (url) {
+      const app = document.getElementById('app');
+      const splash = document.getElementById('splash');
+      const ocultar = () => splash.classList.add('oculto');
+
+      app.addEventListener('load', () => setTimeout(ocultar, 400));
+      setTimeout(ocultar, 8000); // por si la carga se atora
+
       // Si se abre con ?libro=Titulo, se lo pasa a la aplicación
       const libro = params.get('libro');
-      document.getElementById('app').src = url + (libro ? '?libro=' + encodeURIComponent(libro) : '');
+      app.src = url + (libro ? '?libro=' + encodeURIComponent(libro) : '');
     }
   </script>
 </body>
