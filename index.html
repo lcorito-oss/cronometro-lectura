@@ -2,12 +2,12 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Cronómetro de Lectura</title>
 
   <link rel="manifest" href="./manifest.json">
-  <link rel="icon" type="image/png" href="./icon.png">
-  <link rel="apple-touch-icon" href="./icon.png">
+  <link rel="icon" type="image/png" href="./icon-192.png">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
 
   <meta name="theme-color" content="#121318">
   <meta name="mobile-web-app-capable" content="yes">
@@ -22,11 +22,11 @@
   </style>
 </head>
 <body>
-  <iframe id="app"></iframe>
+  <iframe id="app" title="Cronómetro de lectura"></iframe>
 
   <script>
-    // La direccion de la aplicacion de Apps Script ya NO esta escrita en este archivo publico.
-    // Se pide una sola vez en cada dispositivo y se guarda ahi.
+    // La dirección de la aplicación de Apps Script NO está escrita en este archivo público.
+    // Se pide una sola vez en cada dispositivo y se guarda ahí (localStorage).
     const CLAVE = 'direccionAppsScript';
     const params = new URLSearchParams(location.search);
 
@@ -34,8 +34,13 @@
       return /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(u || '');
     }
 
-    // ?reset=1 borra la direccion guardada (por si te equivocaste o cambia la implementacion)
-    if (params.get('reset')) localStorage.removeItem(CLAVE);
+    // ?reset=1 borra la dirección guardada (por si te equivocaste o cambia la implementación)
+    if (params.get('reset')) {
+      localStorage.removeItem(CLAVE);
+      params.delete('reset');
+      const resto = params.toString();
+      history.replaceState(null, '', location.pathname + (resto ? '?' + resto : ''));
+    }
 
     let url = localStorage.getItem(CLAVE);
     if (!valida(url)) {
@@ -49,7 +54,7 @@
     }
 
     if (url) {
-      // Si se abre con ?libro=Titulo, se lo pasa a la aplicacion
+      // Si se abre con ?libro=Titulo, se lo pasa a la aplicación
       const libro = params.get('libro');
       document.getElementById('app').src = url + (libro ? '?libro=' + encodeURIComponent(libro) : '');
     }
