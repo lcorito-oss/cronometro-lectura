@@ -1,10 +1,15 @@
 // Guarda la app en el teléfono para abrirla sin conexión.
 // Los datos (Apps Script) nunca pasan por la caché: la app los guarda por su cuenta.
-const CACHE = 'cronometro-v1';
+const CACHE = 'cronometro-v2';
 const SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', function(e) {
-  e.waitUntil(caches.open(CACHE).then(function(c) { return c.addAll(SHELL); }).then(function() { return self.skipWaiting(); }));
+  // cache: 'reload' evita copias viejas de la caché del navegador (GitHub Pages las conserva ~10 min)
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(function(c) { return c.addAll(SHELL.map(function(u) { return new Request(u, { cache: 'reload' }); })); })
+      .then(function() { return self.skipWaiting(); })
+  );
 });
 
 self.addEventListener('activate', function(e) {
@@ -36,10 +41,13 @@ self.addEventListener('fetch', function(e) {
   if (url.origin !== location.origin) return;
 
   // Archivos de la app: primero lo guardado, y se actualiza en segundo plano
+  // (siempre revalidando contra el servidor, no contra la caché del navegador)
   e.respondWith(caches.open(CACHE).then(async function(c) {
     const key = req.mode === 'navigate' ? new Request(url.origin + url.pathname) : req;
     const hit = await c.match(key, { ignoreSearch: true });
-    const red = fetch(req).then(function(r) { if (r.ok) c.put(key, r.clone()); return r; }).catch(function() { return null; });
+    const red = fetch(req.url, { cache: 'no-cache' })
+      .then(function(r) { if (r.ok) c.put(key, r.clone()); return r; })
+      .catch(function() { return null; });
     return hit || (await red) || (await c.match('./index.html')) || Response.error();
   }));
 });
