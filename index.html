@@ -74,16 +74,24 @@
     .progress-bar-gain { left: 0; width: 0%; background-color: var(--accent-gain); opacity: 0.55; }
     .progress-pill { background-color: rgba(0, 255, 136, 0.12); color: var(--accent-green); padding: 2px 8px; border-radius: 8px; font-weight: 700; font-size: 0.8rem; }
 
+    @property --saved { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+    @property --total { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
     .ring {
       padding: 3px;
       border-radius: 21px;
       margin-bottom: 14px;
-      --ring-color: var(--border-color);
-      --deg: 0deg;
-      background: conic-gradient(var(--ring-color) var(--deg), var(--border-color) 0);
+      --c-saved: #138a5f;               /* lo que ya leíste hoy */
+      --c-run: var(--accent-green);     /* la sesión en curso */
+      --saved: 0deg;
+      --total: 0deg;
+      background: conic-gradient(var(--c-saved) 0deg var(--saved), var(--c-run) var(--saved) var(--total), var(--border-color) var(--total) 360deg);
+      transition: --saved 0.8s linear, --total 0.8s linear;
     }
-    .ring.running { --ring-color: var(--accent-green); animation: pulso 2.4s ease-in-out infinite; }
-    .ring.paused { --ring-color: var(--accent-amber); }
+    .ring.running { animation: pulso 2.4s ease-in-out infinite; }
+    .ring.paused { --c-run: var(--accent-amber); }
+    .ring.meta-ok { --c-saved: var(--accent-btn); --c-run: var(--accent-btn); box-shadow: 0 0 22px rgba(0, 255, 136, 0.22); }
+    .timer-meta { margin-top: 10px; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.5px; color: var(--text-secondary); }
+    .timer-meta.ok { color: var(--accent-green); }
     .timer-display { background-color: #111216; border-radius: 18px; padding: 20px 12px; text-align: center; }
     @keyframes pulso {
       0%, 100% { box-shadow: 0 0 0 rgba(0, 255, 136, 0); }
@@ -239,6 +247,7 @@
     <div class="ring" id="ring">
       <div class="timer-display" id="timerDisplay">
         <div class="digits" id="timer">00:00:00</div>
+        <div class="timer-meta" id="timerMeta"></div>
       </div>
     </div>
 
@@ -363,6 +372,7 @@
     let guardando = false;
     let avanceActual = 0;
     let sincronizando = false;
+    let minHoyGuardados = 0;   // minutos de hoy ya guardados (hoja + pendientes)
 
     const $ = id => document.getElementById(id);
 
@@ -400,6 +410,7 @@
         guardarEstado();
       } else {
         if (isRunning) pintarReloj();
+        renderRitmo();
         sincronizar();
       }
     });
@@ -436,7 +447,36 @@
       $('timer').classList.toggle('running', isRunning);
       $('timer').classList.toggle('paused', pausado);
       $('discardBtn').style.display = total > 0 ? 'block' : 'none';
-      $('ring').style.setProperty('--deg', total > 0 ? ((total % 3600) / 3600 * 360) + 'deg' : '0deg');
+      pintarAnillo(total);
+    }
+
+    // El anillo muestra la meta diaria: lo ya leído hoy (verde oscuro) + la sesión en curso
+    function pintarAnillo(total) {
+      const meta = leerMetas().diaria;
+      const sesion = total / 60;
+      const hoy = minHoyGuardados;
+      const ring = $('ring');
+      ring.style.setProperty('--saved', Math.min(360, hoy / meta * 360) + 'deg');
+      ring.style.setProperty('--total', Math.min(360, (hoy + sesion) / meta * 360) + 'deg');
+
+      const cumplida = hoy + sesion >= meta;
+      const acum = Math.floor(hoy + sesion);
+      ring.classList.toggle('meta-ok', cumplida);
+      const el = $('timerMeta');
+      el.classList.toggle('ok', cumplida);
+      el.textContent = cumplida
+        ? '✓ Meta cumplida · ' + acum + ' min hoy' + (acum > meta ? ' (+' + (acum - meta) + ')' : '')
+        : 'Hoy ' + acum + ' / ' + meta + ' min · faltan ' + Math.ceil(meta - hoy - sesion);
+
+      // Aviso una sola vez al cruzar la meta con el cronómetro en marcha
+      if (isRunning && cumplida && hoy < meta) {
+        const f = fechaHace(0);
+        if (lsGet('avisoMeta', '') !== f) {
+          lsSet('avisoMeta', f);
+          toast('🎯 ¡Meta diaria cumplida!');
+          try { if (navigator.vibrate) navigator.vibrate([40, 30, 40]); } catch (e) {}
+        }
+      }
     }
 
     function pintarReloj() {
@@ -954,6 +994,7 @@
       const d = minutosPorDia();
       const metas = leerMetas();
       const hoy = d[fechaHace(0)] || 0;
+      minHoyGuardados = hoy;
       const racha = calcularRacha(d);
       $('ritmoResumen').textContent = racha > 0 ? '🔥 ' + racha + (racha === 1 ? ' día' : ' días') : '';
 
@@ -980,6 +1021,7 @@
       const r = lsGet('resumenCache', {});
       $('ritmoAnio').textContent = r.anio || new Date().getFullYear();
       $('ritmoLibros').textContent = terminadosAnio() + ' / ' + metas.anual;
+      pintarAnillo(elapsedSeconds());
     }
 
     async function loadResumen() {
