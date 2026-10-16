@@ -205,8 +205,9 @@
     .barra-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; }
     .barra-val { font-size: 0.65rem; color: var(--text-secondary); min-height: 0.8rem; }
     .barra-track { flex: 1; width: 100%; display: flex; align-items: flex-end; background: rgba(255, 255, 255, 0.05); border-radius: 6px; overflow: hidden; }
-    .barra { width: 100%; background: var(--text-secondary); opacity: 0.6; border-radius: 6px 6px 0 0; }
-    .barra.meta { background: var(--accent-btn); opacity: 1; }
+    .barra { width: 100%; display: flex; flex-direction: column-reverse; border-radius: 6px 6px 0 0; overflow: hidden; }
+    .seg { min-height: 0; }
+    .seg + .seg { border-top: 1px solid rgba(0, 0, 0, 0.35); }
     .barra-dia { font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); }
     .barra-dia.hoy { color: var(--accent-green); }
     .ritmo-nota { font-size: 0.72rem; line-height: 1.4; color: var(--text-secondary); margin-top: -4px; }
@@ -308,7 +309,7 @@
       <div class="ritmo-body">
         <div class="barras" id="ritmoBarras" role="img" aria-label="Minutos leídos en los últimos 7 días"></div>
         <div class="ritmo-fila"><span class="selector-label">Hoy</span><span id="ritmoHoy">0 / 30 min</span></div>
-        <div class="progress-bar-bg"><div class="progress-bar-fill" id="ritmoHoyBar"></div></div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="ritmoHoyBar"></div><div class="progress-bar-gain" id="ritmoHoyExtra"></div></div>
         <div class="ritmo-fila"><span class="selector-label">Esta semana</span><span id="ritmoSemana">0 min</span></div>
         <div class="ritmo-fila"><span class="selector-label">Terminados <span id="ritmoAnio"></span></span><span id="ritmoLibros">0 / 24</span></div>
         <div class="fila-doble">
@@ -1041,6 +1042,23 @@
       return leerMetas().base + (r.terminados || 0) + pend;
     }
 
+    // Una barra por día: los primeros "meta" minutos en verde, los siguientes en dorado, azul, violeta...
+    // Un día que no llegó a la meta se queda en gris.
+    function segmentosBarra(m, meta) {
+      if (m <= 0) return '';
+      if (m < meta) return '<div class="seg" style="flex:' + m + ';background:var(--text-secondary);opacity:0.6"></div>';
+      let html = '';
+      let resto = m;
+      let i = 0;
+      while (resto > 0) {
+        const parte = (i >= 11) ? resto : Math.min(meta, resto);
+        html += '<div class="seg" style="flex:' + parte + ';background:' + COLORES_VUELTA[i % 4] + '"></div>';
+        resto -= parte;
+        i++;
+      }
+      return html;
+    }
+
     function renderRitmo() {
       const d = minutosPorDia();
       const metas = leerMetas();
@@ -1062,12 +1080,20 @@
       }
       $('ritmoBarras').innerHTML = dias.map(function(x) {
         return '<div class="barra-col"><span class="barra-val">' + (x.m || '') + '</span>' +
-          '<div class="barra-track"><div class="barra' + (x.m >= metas.diaria ? ' meta' : '') + '" style="height:' + Math.round(x.m / max * 100) + '%"></div></div>' +
+          '<div class="barra-track"><div class="barra" style="height:' + Math.round(x.m / max * 100) + '%">' + segmentosBarra(x.m, metas.diaria) + '</div></div>' +
           '<span class="barra-dia' + (x.hoy ? ' hoy' : '') + '">' + x.letra + '</span></div>';
       }).join('');
 
-      $('ritmoHoy').textContent = hoy + ' / ' + metas.diaria + ' min';
-      $('ritmoHoyBar').style.width = Math.min(100, hoy / metas.diaria * 100) + '%';
+      const rv = hoy / metas.diaria;
+      const vueltasHoy = Math.floor(rv);
+      $('ritmoHoy').textContent = hoy + ' / ' + metas.diaria + ' min' + (vueltasHoy >= 2 ? ' · ×' + vueltasHoy : '');
+      const barraHoy = $('ritmoHoyBar');
+      const extraHoy = $('ritmoHoyExtra');
+      barraHoy.style.width = Math.min(100, rv * 100) + '%';
+      barraHoy.style.background = vueltasHoy >= 1 ? COLORES_VUELTA[(vueltasHoy - 1) % 4] : '';
+      extraHoy.style.width = vueltasHoy >= 1 ? Math.round((rv - vueltasHoy) * 100) + '%' : '0%';
+      extraHoy.style.background = COLORES_VUELTA[vueltasHoy % 4];
+      extraHoy.style.opacity = 1;
       $('ritmoSemana').textContent = formatearMin(semana);
       const r = lsGet('resumenCache', {});
       $('ritmoAnio').textContent = r.anio || new Date().getFullYear();
