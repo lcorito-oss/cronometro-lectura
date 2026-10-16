@@ -204,7 +204,11 @@
     .barras { display: flex; gap: 8px; align-items: flex-end; height: 120px; }
     .barra-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; }
     .barra-val { font-size: 0.65rem; color: var(--text-secondary); min-height: 0.8rem; }
-    .barra-track { flex: 1; width: 100%; display: flex; align-items: flex-end; background: rgba(255, 255, 255, 0.05); border-radius: 6px; overflow: hidden; }
+    .barra-track { position: relative; flex: 1; width: 100%; display: flex; align-items: flex-end; background: rgba(255, 255, 255, 0.05); border-radius: 6px; overflow: hidden; }
+    .meta-linea { position: absolute; left: 0; right: 0; border-top: 1px dashed rgba(255, 255, 255, 0.7); pointer-events: none; z-index: 2; }
+    .leyenda { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 10px; font-size: 0.68rem; color: var(--text-secondary); }
+    .ley-linea { display: inline-block; width: 16px; border-top: 1px dashed rgba(255, 255, 255, 0.7); margin-right: 4px; vertical-align: middle; }
+    .ley-punto { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
     .barra { width: 100%; display: flex; flex-direction: column-reverse; border-radius: 6px 6px 0 0; overflow: hidden; }
     .seg { min-height: 0; }
     .seg + .seg { border-top: 1px solid rgba(0, 0, 0, 0.35); }
@@ -308,6 +312,7 @@
       <summary><span>Mi ritmo</span><span id="ritmoResumen"></span></summary>
       <div class="ritmo-body">
         <div class="barras" id="ritmoBarras" role="img" aria-label="Minutos leídos en los últimos 7 días"></div>
+        <div class="leyenda" id="ritmoLeyenda"></div>
         <div class="ritmo-fila"><span class="selector-label">Hoy</span><span id="ritmoHoy">0 / 30 min</span></div>
         <div class="progress-bar-bg"><div class="progress-bar-fill" id="ritmoHoyBar"></div><div class="progress-bar-gain" id="ritmoHoyExtra"></div></div>
         <div class="ritmo-fila"><span class="selector-label">Esta semana</span><span id="ritmoSemana">0 min</span></div>
@@ -1080,9 +1085,15 @@
       }
       $('ritmoBarras').innerHTML = dias.map(function(x) {
         return '<div class="barra-col"><span class="barra-val">' + (x.m || '') + '</span>' +
-          '<div class="barra-track"><div class="barra" style="height:' + Math.round(x.m / max * 100) + '%">' + segmentosBarra(x.m, metas.diaria) + '</div></div>' +
+          '<div class="barra-track"><div class="barra" style="height:' + Math.round(x.m / max * 100) + '%">' + segmentosBarra(x.m, metas.diaria) + '</div>' +
+          '<div class="meta-linea" style="bottom:' + Math.min(99, metas.diaria / max * 100) + '%"></div></div>' +
           '<span class="barra-dia' + (x.hoy ? ' hoy' : '') + '">' + x.letra + '</span></div>';
       }).join('');
+
+      $('ritmoLeyenda').innerHTML = '<span><i class="ley-linea"></i>Meta ' + metas.diaria + ' min</span><span>Vueltas:</span>' +
+        ['1.ª', '2.ª', '3.ª', '4.ª'].map(function(t, i) {
+          return '<span><i class="ley-punto" style="background:' + COLORES_VUELTA[i] + '"></i>' + t + '</span>';
+        }).join('');
 
       const rv = hoy / metas.diaria;
       const vueltasHoy = Math.floor(rv);
