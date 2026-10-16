@@ -1,73 +1,824 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Cronómetro de Lectura</title>
-
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" type="image/png" href="./icon-192.png">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-
   <meta name="theme-color" content="#121318">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    #splash { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #121318; transition: opacity .4s; }
-#splash.oculto { opacity: 0; pointer-events: none; }
-#splash img { width: 96px; height: 96px; border-radius: 22px; }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background-color: #121318; }
-    iframe { width: 100%; height: 100%; border: none; }
-    p { color: #e1e2e6; font-family: sans-serif; padding: 24px; line-height: 1.5; }
+    :root {
+      --bg-color: #121318;
+      --card-bg: #1a1b23;
+      --accent-green: #00ff88;
+      --accent-btn: #19d98b;
+      --accent-gain: #7dffc4;
+      --accent-red: #ff4757;
+      --accent-amber: #ffb020;
+      --text-primary: #e1e2e6;
+      --text-secondary: #9a9dab;
+      --input-bg: #242632;
+      --border-color: #2e3142;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-primary);
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 24px 18px;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+    .header-title { text-align: center; font-size: 0.85rem; letter-spacing: 2px; color: var(--text-secondary); font-weight: 700; margin-bottom: 18px; }
+    .selector-label { font-size: 0.78rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 700; letter-spacing: 1px; }
+
+    .book-selector-container {
+      background-color: var(--input-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    select, input { width: 100%; background-color: transparent; color: var(--text-primary); border: none; outline: none; font-size: 1rem; font-weight: 600; }
+    select:focus-visible { outline: 2px solid var(--accent-green); outline-offset: 2px; border-radius: 6px; }
+    select option { background-color: var(--card-bg); color: var(--text-primary); }
+    .text-input { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 12px; font-size: 1rem; margin-top: 6px; color: #ffffff; }
+    .text-input:focus { border-color: var(--accent-green); }
+    .progress-container { margin-top: 6px; }
+    .progress-info { display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 6px; }
+    .progress-bar-bg { position: relative; width: 100%; height: 8px; background-color: rgba(255, 255, 255, 0.08); border-radius: 6px; overflow: hidden; }
+    .progress-bar-fill, .progress-bar-gain { position: absolute; top: 0; height: 100%; transition: width 0.4s ease, left 0.4s ease; }
+    .progress-bar-fill { left: 0; width: 0%; background-color: var(--accent-green); }
+    .progress-bar-gain { left: 0; width: 0%; background-color: var(--accent-gain); opacity: 0.55; }
+    .progress-pill { background-color: rgba(0, 255, 136, 0.12); color: var(--accent-green); padding: 2px 8px; border-radius: 8px; font-weight: 700; font-size: 0.8rem; }
+
+    .ring {
+      padding: 3px;
+      border-radius: 21px;
+      margin-bottom: 14px;
+      --ring-color: var(--border-color);
+      --deg: 0deg;
+      background: conic-gradient(var(--ring-color) var(--deg), var(--border-color) 0);
+    }
+    .ring.running { --ring-color: var(--accent-green); animation: pulso 2.4s ease-in-out infinite; }
+    .ring.paused { --ring-color: var(--accent-amber); }
+    .timer-display { background-color: #111216; border-radius: 18px; padding: 20px 12px; text-align: center; }
+    @keyframes pulso {
+      0%, 100% { box-shadow: 0 0 0 rgba(0, 255, 136, 0); }
+      50% { box-shadow: 0 0 24px rgba(0, 255, 136, 0.18); }
+    }
+    .digits { font-family: 'JetBrains Mono', monospace; font-size: clamp(2.8rem, 12vw, 4rem); font-weight: 700; color: var(--text-secondary); line-height: 1; }
+    .digits.running { color: var(--accent-green); text-shadow: 0 0 16px rgba(0, 255, 136, 0.3); }
+    .digits.paused { color: var(--accent-amber); }
+    .controls { display: flex; gap: 10px; margin-bottom: 16px; }
+
+    .kpi-container { display: flex; gap: 12px; margin-bottom: 4px; }
+    .kpi-card { flex: 1; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 10px; text-align: center; }
+    .kpi-title { display: block; font-size: 0.72rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 700; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .kpi-value { font-size: 1.1rem; font-weight: 700; color: var(--accent-green); }
+
+    .seccion { display: flex; align-items: center; gap: 10px; margin: 18px 0 12px; font-size: 0.78rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-secondary); }
+    .seccion::before, .seccion::after { content: ""; flex: 1; height: 1px; background: var(--border-color); }
+
+    .input-group {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      background-color: var(--input-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 10px 14px;
+      transition: border-color 0.2s ease;
+    }
+    .input-group:focus-within { border-color: var(--accent-green); }
+    .input-group input { text-align: right; font-family: 'JetBrains Mono', monospace; }
+
+    .fila-doble { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .minutos-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
+      background-color: var(--input-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 10px 14px;
+      transition: border-color 0.2s ease;
+    }
+    .minutos-group:focus-within { border-color: var(--accent-green); }
+    .minutos-group input { text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 1.25rem; width: 100%; margin-top: auto; margin-bottom: auto; color: var(--text-primary); }
+    .fila-doble .input-group { flex-direction: column; align-items: center; gap: 4px; margin-bottom: 0; }
+    .fila-doble .input-group input { text-align: center; font-size: 1.25rem; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; }
+    .avance-row { display: flex; align-items: center; gap: 4px; width: 100%; }
+    .avance-row input { min-width: 0; flex: 1; font-size: 1.25rem; }
+    .btn-quick { flex: 0 0 auto; background: var(--card-bg); color: var(--accent-green); border: 1px solid var(--border-color); padding: 0; width: 36px; min-height: 36px; font-size: 0.8rem; border-radius: 10px; }
+    .kindle-fields { display: flex; align-items: center; gap: 6px; }
+    .kindle-fields input { width: 56px; background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 8px; text-align: center; }
+    #kindleLabel { flex: 1; text-align: center; }
+
+    button { padding: 14px; border: none; border-radius: 12px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: transform 0.1s ease, opacity 0.2s ease, filter 0.2s ease; }
+    button:active { transform: scale(0.98); }
+    button:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
+    .btn-start { flex: 1; background-color: var(--accent-btn); color: #04210f; }
+    .btn-stop { flex: 1; background-color: var(--accent-red); color: #fff; }
+    .btn-ghost { display: none; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); padding: 14px 16px; }
+    .btn-save { width: 100%; background-color: var(--accent-btn); color: #04210f; margin-top: 4px; }
+    .btn-save:hover:not(:disabled) { filter: brightness(1.1); }
+    .btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-retry { display: none; background-color: var(--card-bg); color: var(--accent-green); border: 1px solid var(--border-color); padding: 8px 12px; font-size: 0.85rem; }
+
+    #toast {
+      position: fixed;
+      bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--accent-btn);
+      color: #04210f;
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-weight: 700;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .ring.running { animation: none; }
+      * { transition: none !important; }
+    }
+
+    body { padding-top: calc(12px + env(safe-area-inset-top, 0px)); padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+    #pendientes { text-align: center; font-size: 0.78rem; color: var(--accent-amber); margin-top: 10px; }
+    #pendientes:empty { display: none; }
   </style>
 </head>
 <body>
-  <iframe id="app" title="Cronómetro de lectura"></iframe>
-  <div id="splash"><img src="./icon-192.png" alt=""></div>
+  <div class="card">
+    <div class="header-title">CRONÓMETRO DE LECTURA</div>
+
+    <div class="book-selector-container">
+      <label class="selector-label" for="bookSelect">Libro actual</label>
+      <select id="bookSelect" onchange="handleBookSelectChange()">
+        <option value="">Cargando libros...</option>
+      </select>
+      <button type="button" class="btn-retry" id="retryBooksBtn" onclick="loadBooks(getSelectedBookTitle() || null)">Reintentar</button>
+
+      <div id="newBookInputContainer" style="display: none;">
+        <input type="text" id="newBookTitleInput" class="text-input" placeholder="Escribe el nombre del libro..." aria-label="Nombre del libro nuevo">
+      </div>
+
+      <div class="progress-container">
+        <div class="progress-info">
+          <span>Último avance</span>
+          <span class="progress-pill" id="currentProgressText">0%</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="progressBarFill"></div>
+          <div class="progress-bar-gain" id="progressBarGain"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ring" id="ring">
+      <div class="timer-display" id="timerDisplay">
+        <div class="digits" id="timer">00:00:00</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn-start" id="startBtn" onclick="toggleTimer()">Iniciar Cronómetro</button>
+      <button type="button" class="btn-ghost" id="discardBtn" onclick="descartarCrono()">Descartar</button>
+    </div>
+
+    <div class="kpi-container">
+      <div class="kpi-card">
+        <span class="kpi-title">Total</span>
+        <div class="kpi-value" id="kpiTotalMin">0 min</div>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-title">Prom/Día</span>
+        <div class="kpi-value" id="kpiAvgDaily">0 min</div>
+      </div>
+    </div>
+
+    <div class="seccion">Cerrar sesión</div>
+
+    <div class="fila-doble">
+      <div class="minutos-group">
+        <label class="selector-label" for="manualMinutesInput">Minutos leídos</label>
+        <input type="number" id="manualMinutesInput" min="0" placeholder="0" inputmode="numeric">
+      </div>
+      <div class="input-group">
+        <label class="selector-label" for="newProgressInput">Nvo. avance(%)</label>
+        <div class="avance-row">
+          <button type="button" class="btn-quick" onclick="sumarAvance(1)" aria-label="Sumar 1 por ciento">+1</button>
+          <input type="number" id="newProgressInput" min="0" max="100" inputmode="numeric">
+          <button type="button" class="btn-quick" onclick="sumarAvance(5)" aria-label="Sumar 5 por ciento">+5</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-group">
+      <span class="selector-label" id="kindleLabel" aria-label="Tiempo restante según Kindle, opcional">· T. Kindle ·</span>
+      <div class="kindle-fields" role="group" aria-labelledby="kindleLabel">
+        <input type="number" id="kindleHorasInput" min="0" inputmode="numeric" aria-label="Horas restantes">
+        <span class="selector-label">h</span>
+        <input type="number" id="kindleMinsInput" min="0" max="59" inputmode="numeric" aria-label="Minutos restantes">
+        <span class="selector-label">min</span>
+      </div>
+    </div>
+
+    <button class="btn-save" id="saveBtn" onclick="handleSaveSession()" disabled>Guardar Sesión</button>
+    <div id="pendientes" aria-live="polite"></div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
 
   <script>
-    // La dirección de la aplicación de Apps Script NO está escrita en este archivo público.
-    // Se pide una sola vez en cada dispositivo y se guarda ahí (localStorage).
-    const CLAVE = 'direccionAppsScript';
+    const MAX_HORAS = 12;
+    // ---- Dirección de Apps Script: no está escrita en este archivo, se pide una vez por dispositivo ----
+    const CLAVE_URL = 'direccionAppsScript';
     const params = new URLSearchParams(location.search);
+    function valida(u) { return /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(u || ''); }
 
-    function valida(u) {
-      return /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(u || '');
-    }
-
-    // ?reset=1 borra la dirección guardada (por si te equivocaste o cambia la implementación)
+    // ?reset=1 borra la dirección guardada
     if (params.get('reset')) {
-      localStorage.removeItem(CLAVE);
+      try { localStorage.removeItem(CLAVE_URL); } catch (e) {}
       params.delete('reset');
       const resto = params.toString();
       history.replaceState(null, '', location.pathname + (resto ? '?' + resto : ''));
     }
-
-    let url = localStorage.getItem(CLAVE);
-    if (!valida(url)) {
-      url = (prompt('Pega la dirección de tu aplicación (termina en /exec):') || '').trim();
-      if (valida(url)) {
-        localStorage.setItem(CLAVE, url);
+    let API = null;
+    try { API = localStorage.getItem(CLAVE_URL); } catch (e) {}
+    if (!valida(API)) {
+      API = (prompt('Pega la dirección de tu aplicación (termina en /exec):') || '').trim();
+      if (valida(API)) {
+        try { localStorage.setItem(CLAVE_URL, API); } catch (e) {}
       } else {
-        url = null;
-        document.body.innerHTML = '<p>Falta la dirección de la aplicación.<br>Recarga la página y pégala completa (termina en /exec).</p>';
+        API = null;
+        document.body.innerHTML = '<p style="color:#e1e2e6;font-family:sans-serif;padding:24px;line-height:1.5">Falta la dirección de la aplicación.<br>Recarga la página y pégala completa (termina en /exec).</p>';
       }
     }
-    if (url) {
-      const app = document.getElementById('app');
-      const splash = document.getElementById('splash');
-      const ocultar = () => splash.classList.add('oculto');
+    const LIBRO_PARAM = params.get('libro') || '';
 
-      app.addEventListener('load', () => setTimeout(ocultar, 400));
-      setTimeout(ocultar, 8000); // por si la carga se atora
+    let paramAplicado = false;
+    let timerInterval = null;
+    let seconds = 0;
+    let startMs = 0;
+    let isRunning = false;
+    let booksData = [];
+    let pendienteNuevo = '';
+    let minsManual = false;
+    let estadoRestaurado = false;
+    let guardando = false;
+    let avanceActual = 0;
+    let sincronizando = false;
 
-      // Si se abre con ?libro=Titulo, se lo pasa a la aplicación
-      const libro = params.get('libro');
-      app.src = url + (libro ? '?libro=' + encodeURIComponent(libro) : '');
+    const $ = id => document.getElementById(id);
+
+    function iniciar() {
+      $('bookSelect').addEventListener('change', guardarEstado);
+      $('newBookTitleInput').addEventListener('change', guardarEstado);
+      $('newBookTitleInput').addEventListener('input', actualizarGuardar);
+      $('manualMinutesInput').addEventListener('input', function() { minsManual = true; actualizarGuardar(); });
+      $('newProgressInput').addEventListener('input', function() { previewAvance(); actualizarGuardar(); });
+      actualizarGuardar();
+      actualizarPendientes();
+
+      loadBooks(restaurarEstado());
+      sincronizar();
+      setInterval(function() { if (leerCola().length) sincronizar(); }, 60000);
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js').catch(function() {});
+      }
     }
+
+    document.addEventListener('visibilitychange', function() {
+      if (document.hidden) {
+        guardarEstado();
+      } else {
+        if (isRunning) pintarReloj();
+        sincronizar();
+      }
+    });
+
+    window.addEventListener('online', function() {
+      toast('Conexión restablecida.');
+      sincronizar();
+      if ($('retryBooksBtn').style.display === 'block') loadBooks($('bookSelect').value || null);
+    });
+
+    window.addEventListener('offline', function() {
+      toast('Sin conexión. Todo se guardará en este dispositivo.');
+    });
+
+    function toast(msg) {
+      const t = $('toast');
+      t.innerText = msg;
+      t.classList.add('show');
+      setTimeout(function() { t.classList.remove('show'); }, 2500);
+    }
+
+    function vibrar() {
+      try { if (navigator.vibrate) navigator.vibrate(15); } catch (e) {}
+    }
+
+    function elapsedSeconds() {
+      return seconds + (isRunning ? Math.floor((Date.now() - startMs) / 1000) : 0);
+    }
+
+    function aplicarEstadoVisual(total) {
+      const pausado = !isRunning && total > 0;
+      $('ring').classList.toggle('running', isRunning);
+      $('ring').classList.toggle('paused', pausado);
+      $('timer').classList.toggle('running', isRunning);
+      $('timer').classList.toggle('paused', pausado);
+      $('discardBtn').style.display = total > 0 ? 'block' : 'none';
+      $('ring').style.setProperty('--deg', total > 0 ? ((total % 3600) / 3600 * 360) + 'deg' : '0deg');
+    }
+
+    function pintarReloj() {
+      const total = elapsedSeconds();
+      const h = String(Math.floor(total / 3600)).padStart(2, '0');
+      const m = String(Math.floor((total % 3600) / 60)).padStart(2, '0');
+      const s = String(total % 60).padStart(2, '0');
+      $('timer').innerText = `${h}:${m}:${s}`;
+      if (!minsManual) {
+        $('manualMinutesInput').value = total > 0 ? Math.max(1, Math.round(total / 60)) : '';
+      }
+      aplicarEstadoVisual(total);
+      actualizarGuardar();
+    }
+
+    function mostrarEstadoReloj() {
+      const btn = $('startBtn');
+      clearInterval(timerInterval);
+      if (isRunning) {
+        btn.innerText = 'Pausar';
+        btn.className = 'btn-stop';
+        timerInterval = setInterval(pintarReloj, 1000);
+      } else {
+        btn.innerText = 'Continuar Cronómetro';
+        btn.className = 'btn-start';
+      }
+      pintarReloj();
+    }
+
+    // El reloj vive en este dispositivo (sobrevive a cerrar la app)
+    function guardarEstado() {
+      if (!isRunning && seconds === 0) return;
+      lsSet('cronoEstado', {
+        isRunning: isRunning,
+        startMs: startMs,
+        seconds: seconds,
+        libro: $('bookSelect').value,
+        nuevo: $('newBookTitleInput').value
+      });
+    }
+
+    // Devuelve el libro que estaba seleccionado con el reloj (o null)
+    function restaurarEstado() {
+      const est = lsGet('cronoEstado', null);
+      let seleccionar = null;
+      if (est && (est.isRunning || Number(est.seconds) > 0)) {
+        seconds = Number(est.seconds) || 0;
+        isRunning = !!est.isRunning;
+        startMs = Number(est.startMs) || 0;
+        if (elapsedSeconds() > MAX_HORAS * 3600) {
+          resetTimer();
+          toast('Se descartó un cronómetro de más de ' + MAX_HORAS + ' h.');
+        } else {
+          estadoRestaurado = true;
+          seleccionar = est.libro || null;
+          pendienteNuevo = est.nuevo || '';
+          mostrarEstadoReloj();
+        }
+      }
+      return seleccionar;
+    }
+
+    function formatearMin(total) {
+      const t = Math.max(0, Math.round(Number(total) || 0));
+      const h = Math.floor(t / 60);
+      const m = t % 60;
+      return h > 0 ? h + ' h ' + m + ' min' : m + ' min';
+    }
+
+    function mostrarMetricas(m, titulo) {
+      const pend = leerCola()
+        .filter(x => x.bookTitle.toLowerCase() === titulo.toLowerCase())
+        .reduce((a, x) => a + x.minutes, 0);
+      if (!m && !pend) {
+        $('kpiTotalMin').innerText = '-- min';
+        $('kpiAvgDaily').innerText = '-- min';
+        return;
+      }
+      $('kpiTotalMin').innerText = formatearMin((m ? m.totalMinutes : 0) + pend);
+      $('kpiAvgDaily').innerText = m ? formatearMin(m.avgDaily) : '-- min';
+    }
+
+    async function loadMetrics() {
+      const titulo = getSelectedBookTitle();
+      if (!titulo) {
+        $('kpiTotalMin').innerText = '0 min';
+        $('kpiAvgDaily').innerText = '0 min';
+        return;
+      }
+      const cache = lsGet('metricasCache', {});
+      mostrarMetricas(cache[titulo] || null, titulo);
+      if (!navigator.onLine) return;
+      try {
+        const m = await apiGet({ action: 'metricas', libro: titulo });
+        if (m && typeof m.totalMinutes === 'number') {
+          cache[titulo] = m;
+          lsSet('metricasCache', cache);
+          if (titulo === getSelectedBookTitle()) mostrarMetricas(m, titulo);
+        }
+      } catch (e) {}
+    }
+
+    // Llena el selector con booksData y deja elegido "seleccionar"
+    function poblarLibros(seleccionar) {
+      const select = $('bookSelect');
+      select.innerHTML = '';
+      booksData.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.title;
+        opt.innerText = b.title;
+        select.appendChild(opt);
+      });
+      const optNew = document.createElement('option');
+      optNew.value = '__NEW__';
+      optNew.innerText = '+ Agregar nuevo libro';
+      select.appendChild(optNew);
+
+      if (seleccionar === '__NEW__') {
+        select.value = '__NEW__';
+        if (pendienteNuevo) {
+          $('newBookTitleInput').value = pendienteNuevo;
+          pendienteNuevo = '';
+        }
+      } else if (seleccionar && booksData.some(b => b.title === seleccionar)) {
+        select.value = seleccionar;
+      }
+    }
+
+    // Las sesiones pendientes de enviar ya cuentan en la lista local
+    function aplicarPendientesALibros() {
+      leerCola().forEach(function(x) {
+        const b = booksData.find(k => k.title.toLowerCase() === x.bookTitle.toLowerCase());
+        if (b) b.progress = x.progress;
+        else booksData.push({ title: x.bookTitle, author: 'En lectura', progress: x.progress });
+      });
+      booksData = booksData.filter(b => b.progress < 100);
+    }
+
+    // ?libro=Titulo: se aplica una sola vez y solo si no hay un reloj en curso
+    function aplicarParamLibro() {
+      if (!LIBRO_PARAM || paramAplicado) return false;
+      paramAplicado = true;
+      if (estadoRestaurado) return false;
+      const select = $('bookSelect');
+      const hallado = booksData.find(b => b.title.trim().toLowerCase() === LIBRO_PARAM.trim().toLowerCase());
+      if (hallado) {
+        select.value = hallado.title;
+      } else {
+        select.value = '__NEW__';
+        $('newBookTitleInput').value = LIBRO_PARAM.trim();
+      }
+      return true;
+    }
+
+    async function loadBooks(seleccionar) {
+      const retryBtn = $('retryBooksBtn');
+
+      // 1) Se muestra al instante la lista guardada en este dispositivo
+      const cache = lsGet('librosCache', null);
+      if (cache) {
+        booksData = cache;
+        aplicarPendientesALibros();
+        poblarLibros(seleccionar);
+        aplicarParamLibro();
+        handleBookSelectChange();
+      }
+
+      if (!navigator.onLine) {
+        if (!cache) {
+          $('bookSelect').innerHTML = '<option value="">Sin conexión y sin lista guardada</option>';
+          retryBtn.style.display = 'block';
+        }
+        return;
+      }
+
+      // 2) Se actualiza desde el servidor
+      try {
+        const r = await apiGet({ action: 'libros' });
+        if (!Array.isArray(r)) throw new Error((r && r.error) || 'Respuesta inválida');
+        retryBtn.style.display = 'none';
+        lsSet('librosCache', r);
+
+        const antes = avanceActual;
+        const eleccion = cache ? ($('bookSelect').value || seleccionar) : seleccionar;
+        booksData = r;
+        aplicarPendientesALibros();
+        poblarLibros(eleccion);
+        const param = aplicarParamLibro();
+        const sel = booksData.find(b => b.title === $('bookSelect').value);
+        if (!cache || param || !sel || sel.progress !== antes) handleBookSelectChange();
+        else loadMetrics();
+      } catch (err) {
+        console.error('Error al cargar libros:', err);
+        if (!cache) {
+          $('bookSelect').innerHTML = '<option value="">No se pudieron cargar los libros</option>';
+          retryBtn.style.display = 'block';
+          toast('Error al cargar los libros.');
+        }
+      }
+    }
+
+    function handleBookSelectChange() {
+      const selectValue = $('bookSelect').value;
+      if (selectValue === '__NEW__') {
+        $('newBookInputContainer').style.display = 'block';
+        avanceActual = 0;
+        $('currentProgressText').innerText = '0%';
+        $('progressBarFill').style.width = '0%';
+        $('newProgressInput').value = '0';
+        $('kpiTotalMin').innerText = '0 min';
+        $('kpiAvgDaily').innerText = '0 min';
+        previewAvance();
+        actualizarGuardar();
+      } else {
+        $('newBookInputContainer').style.display = 'none';
+        updateSelectedBookProgress();
+      }
+    }
+
+    function getSelectedBookTitle() {
+      const selectValue = $('bookSelect').value;
+      if (selectValue === '__NEW__') {
+        return $('newBookTitleInput').value.trim();
+      }
+      return selectValue;
+    }
+
+    function updateSelectedBookProgress() {
+      const title = $('bookSelect').value;
+      const book = booksData.find(b => b.title === title);
+      avanceActual = book ? book.progress : 0;
+
+      $('currentProgressText').innerText = avanceActual + '%';
+      $('progressBarFill').style.width = avanceActual + '%';
+      $('newProgressInput').value = avanceActual;
+
+      previewAvance();
+      actualizarGuardar();
+      loadMetrics();
+    }
+
+    function previewAvance() {
+      const nuevo = Math.min(100, Math.max(0, Number($('newProgressInput').value) || 0));
+      const gain = $('progressBarGain');
+      gain.style.left = avanceActual + '%';
+      gain.style.width = Math.max(0, nuevo - avanceActual) + '%';
+    }
+
+    function sumarAvance(n) {
+      const input = $('newProgressInput');
+      input.value = Math.min(100, (Number(input.value) || 0) + n);
+      vibrar();
+      previewAvance();
+      actualizarGuardar();
+    }
+
+    function actualizarGuardar() {
+      const btn = $('saveBtn');
+      const titulo = getSelectedBookTitle();
+      const raw = String($('newProgressInput').value).replace('%', '').trim();
+      const p = Number(raw);
+      const progresoOk = raw !== '' && !isNaN(p) && p >= 0 && p <= 100;
+      const manual = Number($('manualMinutesInput').value);
+      const mins = manual > 0 ? manual : Math.round(elapsedSeconds() / 60);
+      btn.disabled = guardando || !(titulo && progresoOk && (mins > 0 || p === 0));
+    }
+
+    function toggleTimer() {
+      const btn = $('startBtn');
+      vibrar();
+
+      if (!isRunning) {
+        isRunning = true;
+        startMs = Date.now();
+        btn.innerText = 'Pausar';
+        btn.className = 'btn-stop';
+        timerInterval = setInterval(pintarReloj, 1000);
+      } else {
+        seconds = elapsedSeconds();
+        isRunning = false;
+        clearInterval(timerInterval);
+        btn.innerText = 'Continuar Cronómetro';
+        btn.className = 'btn-start';
+      }
+      pintarReloj();
+      guardarEstado();
+    }
+
+    function resetTimer() {
+      clearInterval(timerInterval);
+      isRunning = false;
+      seconds = 0;
+      startMs = 0;
+      minsManual = false;
+      const btn = $('startBtn');
+      btn.innerText = 'Iniciar Cronómetro';
+      btn.className = 'btn-start';
+      pintarReloj();
+      lsDel('cronoEstado');
+    }
+
+    function descartarCrono() {
+      if (!confirm('¿Descartar el cronómetro? Se perderá el tiempo acumulado.')) return;
+      resetTimer();
+      $('manualMinutesInput').value = '';
+      toast('Cronómetro descartado.');
+    }
+
+    function handleSaveSession() {
+      const btn = $('saveBtn');
+      if (btn.disabled) return;
+
+      const bookTitle = getSelectedBookTitle();
+      if (!bookTitle) {
+        alert('Ingresa o selecciona un título de libro válido.');
+        return;
+      }
+
+      const manualMins = Number($('manualMinutesInput').value);
+      const timerMins = Math.round(elapsedSeconds() / 60);
+
+      const progressRaw = $('newProgressInput').value;
+      const progress = Number(String(progressRaw).replace('%', '').trim());
+      if (String(progressRaw).trim() === '' || isNaN(progress) || progress < 0 || progress > 100) {
+        alert('El avance debe ser un número entre 0 y 100.');
+        return;
+      }
+
+      const minutes = manualMins > 0 ? manualMins : timerMins;
+      if (minutes <= 0 && progress > 0) {
+        alert('Escribe los minutos leídos o usa el cronómetro.');
+        return;
+      }
+
+      const libro = booksData.find(b => b.title === bookTitle);
+      const ultimo = libro ? libro.progress : 0;
+      if (libro && progress <= ultimo) {
+        const ok = confirm(`El avance (${progress}%) no es mayor que el último (${ultimo}%).\n¿Guardar la sesión de todos modos?`);
+        if (!ok) return;
+      }
+
+      const kH = $('kindleHorasInput').value.trim();
+      const kM = $('kindleMinsInput').value.trim();
+      let kindleFalta = '';
+      if (kH !== '' || kM !== '') {
+        const h = Number(kH || 0), m = Number(kM || 0);
+        if (isNaN(h) || isNaN(m) || h < 0 || m < 0 || m > 59) {
+          alert('Revisa el tiempo de Kindle: horas desde 0 y minutos entre 0 y 59.');
+          return;
+        }
+        kindleFalta = h + ' h ' + m + ' min';
+      }
+
+      const sesion = {
+        id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2),
+        bookTitle: bookTitle,
+        minutes: minutes,
+        progress: progress,
+        kindleFalta: kindleFalta,
+        fecha: fechaLocal(Date.now())
+      };
+
+      // Siempre se guarda primero en este dispositivo; después se envía a la hoja
+      const cola = leerCola();
+      cola.push(sesion);
+      if (!escribirCola(cola)) {
+        alert('No se pudo guardar en este dispositivo. Intenta de nuevo.');
+        return;
+      }
+
+      vibrar();
+      toast(navigator.onLine ? '¡Sesión guardada!' : 'Sesión guardada. Se enviará al reconectar.');
+      guardando = true;                                   // evita un doble toque
+      setTimeout(function() { guardando = false; actualizarGuardar(); }, 800);
+      resetTimer();
+      $('manualMinutesInput').value = '';
+      $('newBookTitleInput').value = '';
+      $('kindleHorasInput').value = '';
+      $('kindleMinsInput').value = '';
+      actualizarPendientes();
+      loadBooks(bookTitle);
+      sincronizar();
+    }
+
+    // ---- Datos locales y sincronización ----
+    function lsGet(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+    function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
+    function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+    function leerCola() { return lsGet('sesionesPendientes', []); }
+    function escribirCola(c) { return lsSet('sesionesPendientes', c); }
+
+    function fechaLocal(ts) {
+      const d = new Date(ts);
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    function actualizarPendientes() {
+      const n = leerCola().length;
+      $('pendientes').textContent = n ? n + (n === 1 ? ' sesión pendiente de enviar' : ' sesiones pendientes de enviar') : '';
+    }
+
+    async function apiFetch(opciones, query) {
+      const ctl = new AbortController();
+      const t = setTimeout(function() { ctl.abort(); }, 20000);
+      try {
+        const r = await fetch(API + (query ? '?' + new URLSearchParams(query) : ''), Object.assign({ signal: ctl.signal }, opciones));
+        return await r.json();
+      } finally {
+        clearTimeout(t);
+      }
+    }
+    function apiGet(q) { return apiFetch({}, q); }
+    // Sin cabecera personalizada: así el navegador no hace "preflight" contra Apps Script
+    function apiPost(body) { return apiFetch({ method: 'POST', body: JSON.stringify(body) }); }
+
+    async function sincronizar() {
+      if (sincronizando || !API || !navigator.onLine) return;
+      let cola = leerCola();
+      if (!cola.length) return;
+      sincronizando = true;
+      let enviadas = 0;
+      try {
+        while (cola.length) {
+          const x = cola[0];
+          let r;
+          try {
+            r = await apiPost({ action: 'guardar', id: x.id, bookTitle: x.bookTitle, minutes: x.minutes, progress: x.progress, kindleFalta: x.kindleFalta, fecha: x.fecha });
+          } catch (e) {
+            break;                                         // sin red o sin respuesta: se reintenta después
+          }
+          if (r && r.ok) {
+            enviadas++;
+          } else {                                         // el servidor la rechazó: se aparta para no bloquear
+            const f = lsGet('sesionesFallidas', []);
+            f.push(Object.assign({}, x, { error: (r && r.error) || 'desconocido' }));
+            lsSet('sesionesFallidas', f);
+            toast('Una sesión fue rechazada por el servidor.');
+          }
+          cola.shift();
+          escribirCola(cola);
+          actualizarPendientes();
+        }
+      } finally {
+        sincronizando = false;
+        actualizarPendientes();
+      }
+      if (enviadas) toast(enviadas === 1 ? 'Sesión sincronizada.' : enviadas + ' sesiones sincronizadas.');
+      if (enviadas && !leerCola().length) {
+        loadBooks($('bookSelect').value || null);
+        loadMetrics();
+      }
+    }
+
+    if (API) iniciar();
   </script>
 </body>
 </html>
