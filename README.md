@@ -11,7 +11,7 @@ App para registrar sesiones de lectura: libro, minutos, avance (%) y tiempo rest
 
 ## Mi ritmo, metas y aviso de libro terminado
 
-- **Mi ritmo** (sección plegable al final): gráfica de los últimos 7 días, minutos de hoy contra la meta diaria, total de la semana y la racha de días seguidos leyendo. Las barras en verde son los días que cumpliste la meta.
+- **Mi ritmo** (sección plegable al final): gráfica de los últimos 7 días, minutos de hoy contra la meta diaria, total de la semana y la racha de días seguidos leyendo. Cada barra se divide por colores como el anillo: los primeros minutos de la meta en verde, los siguientes en dorado, azul y violeta; un día que no llegó a la meta queda en gris.
 - **Metas:** diaria (minutos) y anual (libros). Se guardan en cada dispositivo y se pueden cambiar ahí mismo.
 - **Libros terminados:** cuenta los libros que llegaron al 100 % en la hoja de sesiones durante el año actual, más el número que escribas en *Terminados sin cronómetro* (para igualarlo con tu Excel; se reinicia solo cada año).
 - **Anillo del cronómetro:** muestra la meta diaria. Cada vuelta completa es una meta; las vueltas extra se dibujan encima con otro color (dorado, azul, violeta).
