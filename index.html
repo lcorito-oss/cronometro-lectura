@@ -267,12 +267,14 @@
     const MAX_HORAS = 12;
     // ---- Dirección de Apps Script: no está escrita en este archivo, se pide una vez por dispositivo ----
     const CLAVE_URL = 'direccionAppsScript';
+    const CLAVE_API = 'claveApi';          // clave opcional que pide Apps Script
+    let claveCancelada = false;
     const params = new URLSearchParams(location.search);
     function valida(u) { return /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(u || ''); }
 
-    // ?reset=1 borra la dirección guardada
+    // ?reset=1 borra la dirección y la clave guardadas
     if (params.get('reset')) {
-      try { localStorage.removeItem(CLAVE_URL); } catch (e) {}
+      try { localStorage.removeItem(CLAVE_URL); localStorage.removeItem(CLAVE_API); } catch (e) {}
       params.delete('reset');
       const resto = params.toString();
       history.replaceState(null, '', location.pathname + (resto ? '?' + resto : ''));
@@ -766,19 +768,40 @@
       $('pendientes').textContent = n ? n + (n === 1 ? ' sesión pendiente de enviar' : ' sesiones pendientes de enviar') : '';
     }
 
-    async function apiFetch(opciones, query) {
-      const ctl = new AbortController();
-      const t = setTimeout(function() { ctl.abort(); }, 20000);
-      try {
-        const r = await fetch(API + (query ? '?' + new URLSearchParams(query) : ''), Object.assign({ signal: ctl.signal }, opciones));
-        return await r.json();
-      } finally {
-        clearTimeout(t);
+    function leerClave() { try { return localStorage.getItem(CLAVE_API) || ''; } catch (e) { return ''; } }
+
+    // "construir" recibe la clave guardada y devuelve { query, opciones }
+    async function apiFetch(construir) {
+      for (let intento = 0; intento < 2; intento++) {
+        const c = construir(leerClave());
+        const ctl = new AbortController();
+        const t = setTimeout(function() { ctl.abort(); }, 20000);
+        let r;
+        try {
+          const resp = await fetch(API + (c.query ? '?' + new URLSearchParams(c.query) : ''), Object.assign({ signal: ctl.signal }, c.opciones));
+          r = await resp.json();
+        } finally {
+          clearTimeout(t);
+        }
+        if (r && r.error === 'clave') {                    // el servidor pide clave (o la guardada ya no sirve)
+          if (intento === 1) { try { localStorage.removeItem(CLAVE_API); } catch (e) {} throw new Error('clave'); }
+          if (claveCancelada) throw new Error('clave');
+          const k = (prompt('Esta app está protegida. Escribe tu clave:') || '').trim();
+          if (!k) { claveCancelada = true; throw new Error('clave'); }
+          try { localStorage.setItem(CLAVE_API, k); } catch (e) {}
+          continue;
+        }
+        return r;
       }
+      throw new Error('clave');
     }
-    function apiGet(q) { return apiFetch({}, q); }
+    function apiGet(q) {
+      return apiFetch(function(k) { return { query: Object.assign({}, q, k ? { k: k } : {}) }; });
+    }
     // Sin cabecera personalizada: así el navegador no hace "preflight" contra Apps Script
-    function apiPost(body) { return apiFetch({ method: 'POST', body: JSON.stringify(body) }); }
+    function apiPost(body) {
+      return apiFetch(function(k) { return { opciones: { method: 'POST', body: JSON.stringify(Object.assign({}, body, k ? { k: k } : {})) } }; });
+    }
 
     async function sincronizar() {
       if (sincronizando || !API || !navigator.onLine) return;
