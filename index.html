@@ -179,6 +179,34 @@
     body { padding-top: calc(12px + env(safe-area-inset-top, 0px)); padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
     #pendientes { text-align: center; font-size: 0.78rem; color: var(--accent-amber); margin-top: 10px; }
     #pendientes:empty { display: none; }
+
+    /* MI RITMO */
+    details.ritmo { margin-top: 16px; border-top: 1px solid var(--border-color); padding-top: 8px; }
+    .ritmo summary { cursor: pointer; display: flex; justify-content: space-between; align-items: center; min-height: 40px; list-style: none; font-size: 0.78rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-secondary); }
+    .ritmo summary::-webkit-details-marker { display: none; }
+    .ritmo summary > span:first-child::after { content: ' ▾'; }
+    .ritmo[open] summary > span:first-child::after { content: ' ▴'; }
+    #ritmoResumen { color: var(--accent-amber); letter-spacing: 0; text-transform: none; font-size: 0.85rem; }
+    .ritmo-body { padding-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+    .barras { display: flex; gap: 8px; align-items: flex-end; height: 120px; }
+    .barra-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; }
+    .barra-val { font-size: 0.65rem; color: var(--text-secondary); min-height: 0.8rem; }
+    .barra-track { flex: 1; width: 100%; display: flex; align-items: flex-end; background: rgba(255, 255, 255, 0.05); border-radius: 6px; overflow: hidden; }
+    .barra { width: 100%; background: var(--text-secondary); opacity: 0.6; border-radius: 6px 6px 0 0; }
+    .barra.meta { background: var(--accent-btn); opacity: 1; }
+    .barra-dia { font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); }
+    .barra-dia.hoy { color: var(--accent-green); }
+    .ritmo-fila { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 0.9rem; }
+
+    /* AVISO AL TERMINAR UN LIBRO */
+    .fin { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(8, 9, 12, 0.8); }
+    .fin[hidden] { display: none; }
+    .fin-card { width: 100%; max-width: 360px; text-align: center; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 20px; padding: 28px 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; gap: 10px; }
+    .fin-emoji { font-size: 3rem; line-height: 1; }
+    .fin-card h2 { font-size: 1.1rem; }
+    .fin-card p { color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4; }
+    #finLibro { color: var(--text-primary); font-weight: 700; }
+    .fin-card button { margin-top: 8px; }
   </style>
 </head>
 <body>
@@ -259,9 +287,40 @@
 
     <button class="btn-save" id="saveBtn" onclick="handleSaveSession()" disabled>Guardar Sesión</button>
     <div id="pendientes" aria-live="polite"></div>
+
+    <details class="ritmo" id="ritmo">
+      <summary><span>Mi ritmo</span><span id="ritmoResumen"></span></summary>
+      <div class="ritmo-body">
+        <div class="barras" id="ritmoBarras" role="img" aria-label="Minutos leídos en los últimos 7 días"></div>
+        <div class="ritmo-fila"><span class="selector-label">Hoy</span><span id="ritmoHoy">0 / 30 min</span></div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="ritmoHoyBar"></div></div>
+        <div class="ritmo-fila"><span class="selector-label">Esta semana</span><span id="ritmoSemana">0 min</span></div>
+        <div class="ritmo-fila"><span class="selector-label">Terminados <span id="ritmoAnio"></span></span><span id="ritmoLibros">0 / 24</span></div>
+        <div class="fila-doble">
+          <div class="minutos-group">
+            <label class="selector-label" for="metaDiariaInput">Meta diaria (min)</label>
+            <input type="number" id="metaDiariaInput" min="1" inputmode="numeric">
+          </div>
+          <div class="minutos-group">
+            <label class="selector-label" for="metaAnualInput">Meta anual (libros)</label>
+            <input type="number" id="metaAnualInput" min="1" inputmode="numeric">
+          </div>
+        </div>
+      </div>
+    </details>
   </div>
 
   <div id="toast" role="status" aria-live="polite"></div>
+
+  <div id="fin" class="fin" hidden role="dialog" aria-modal="true" aria-labelledby="finTitulo">
+    <div class="fin-card">
+      <div class="fin-emoji" aria-hidden="true">🎉</div>
+      <h2 id="finTitulo">¡Terminaste un libro!</h2>
+      <p id="finLibro"></p>
+      <p id="finDatos"></p>
+      <button type="button" class="btn-start" id="finBtn" onclick="cerrarFin()">Seguir leyendo</button>
+    </div>
+  </div>
 
   <script>
     const MAX_HORAS = 12;
@@ -318,6 +377,17 @@
 
       loadBooks(restaurarEstado());
       sincronizar();
+
+      const metas = leerMetas();
+      $('metaDiariaInput').value = metas.diaria;
+      $('metaAnualInput').value = metas.anual;
+      ['metaDiariaInput', 'metaAnualInput'].forEach(function(id) {
+        $(id).addEventListener('change', function() {
+          lsSet('metas', { diaria: Number($('metaDiariaInput').value) || 30, anual: Number($('metaAnualInput').value) || 24 });
+          renderRitmo();
+        });
+      });
+      loadResumen();
       setInterval(function() { if (leerCola().length) sincronizar(); }, 60000);
 
       if ('serviceWorker' in navigator) {
@@ -747,6 +817,8 @@
       $('kindleHorasInput').value = '';
       $('kindleMinsInput').value = '';
       actualizarPendientes();
+      renderRitmo();
+      if (progress >= 100) mostrarFin(bookTitle, minutes);
       loadBooks(bookTitle);
       sincronizar();
     }
@@ -838,8 +910,113 @@
       if (enviadas && !leerCola().length) {
         loadBooks($('bookSelect').value || null);
         loadMetrics();
+        loadResumen();
       }
     }
+
+    // ---- Mi ritmo: gráfica semanal, metas y racha ----
+    function leerMetas() {
+      const m = lsGet('metas', {});
+      return { diaria: Number(m.diaria) > 0 ? Number(m.diaria) : 30, anual: Number(m.anual) > 0 ? Number(m.anual) : 24 };
+    }
+
+    function fechaHace(n) {
+      const d = new Date();
+      d.setDate(d.getDate() - n);
+      return fechaLocal(d.getTime());
+    }
+
+    // Minutos por día: lo que ya está en la hoja + lo que sigue pendiente de enviar
+    function minutosPorDia() {
+      const r = lsGet('resumenCache', { dias: {} });
+      const d = Object.assign({}, r.dias || {});
+      leerCola().forEach(function(x) {
+        if (x.minutes > 0) d[x.fecha] = (d[x.fecha] || 0) + x.minutes;
+      });
+      return d;
+    }
+
+    // Días seguidos leyendo (si hoy aún no lees, cuenta desde ayer)
+    function calcularRacha(d) {
+      let n = 0;
+      let i = (d[fechaHace(0)] || 0) > 0 ? 0 : 1;
+      while ((d[fechaHace(i)] || 0) > 0 && i < 400) { n++; i++; }
+      return n;
+    }
+
+    function terminadosAnio() {
+      const r = lsGet('resumenCache', { terminados: 0 });
+      const pend = new Set(leerCola().filter(x => x.progress >= 100).map(x => x.bookTitle.toLowerCase())).size;
+      return (r.terminados || 0) + pend;
+    }
+
+    function renderRitmo() {
+      const d = minutosPorDia();
+      const metas = leerMetas();
+      const hoy = d[fechaHace(0)] || 0;
+      const racha = calcularRacha(d);
+      $('ritmoResumen').textContent = racha > 0 ? '🔥 ' + racha + (racha === 1 ? ' día' : ' días') : '';
+
+      const letras = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+      const dias = [];
+      let semana = 0;
+      let max = metas.diaria;
+      for (let i = 6; i >= 0; i--) {
+        const f = fechaHace(i);
+        const m = d[f] || 0;
+        semana += m;
+        max = Math.max(max, m);
+        dias.push({ m: m, letra: letras[new Date(f + 'T00:00:00').getDay()], hoy: i === 0 });
+      }
+      $('ritmoBarras').innerHTML = dias.map(function(x) {
+        return '<div class="barra-col"><span class="barra-val">' + (x.m || '') + '</span>' +
+          '<div class="barra-track"><div class="barra' + (x.m >= metas.diaria ? ' meta' : '') + '" style="height:' + Math.round(x.m / max * 100) + '%"></div></div>' +
+          '<span class="barra-dia' + (x.hoy ? ' hoy' : '') + '">' + x.letra + '</span></div>';
+      }).join('');
+
+      $('ritmoHoy').textContent = hoy + ' / ' + metas.diaria + ' min';
+      $('ritmoHoyBar').style.width = Math.min(100, hoy / metas.diaria * 100) + '%';
+      $('ritmoSemana').textContent = formatearMin(semana);
+      const r = lsGet('resumenCache', {});
+      $('ritmoAnio').textContent = r.anio || new Date().getFullYear();
+      $('ritmoLibros').textContent = terminadosAnio() + ' / ' + metas.anual;
+    }
+
+    async function loadResumen() {
+      renderRitmo();
+      if (!navigator.onLine || !API) return;
+      try {
+        const r = await apiGet({ action: 'resumen' });
+        if (r && r.dias) {
+          lsSet('resumenCache', r);
+          renderRitmo();
+        }
+      } catch (e) {}
+    }
+
+    // ---- Aviso al terminar un libro ----
+    function minutosLibro(titulo) {
+      const c = lsGet('metricasCache', {})[titulo];
+      const pend = leerCola()
+        .filter(x => x.bookTitle.toLowerCase() === titulo.toLowerCase())
+        .reduce((a, x) => a + x.minutes, 0);
+      return (c ? c.totalMinutes : 0) + pend;
+    }
+
+    function mostrarFin(titulo, minSesion) {
+      const r = lsGet('resumenCache', {});
+      $('finLibro').textContent = '«' + titulo + '»';
+      $('finDatos').textContent = 'Esta sesión: ' + formatearMin(minSesion) +
+        ' · Total con el cronómetro: ' + formatearMin(minutosLibro(titulo)) +
+        '. Llevas ' + terminadosAnio() + ' libros terminados en ' + (r.anio || new Date().getFullYear()) +
+        ' (meta: ' + leerMetas().anual + ').';
+      try { if (navigator.vibrate) navigator.vibrate([60, 40, 60, 40, 120]); } catch (e) {}
+      $('fin').hidden = false;
+      $('finBtn').focus();
+    }
+
+    function cerrarFin() { $('fin').hidden = true; }
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') cerrarFin(); });
 
     if (API) iniciar();
   </script>
