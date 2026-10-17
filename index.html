@@ -83,7 +83,7 @@
       margin-bottom: 14px;
       --c-saved: #138a5f;               /* lo que ya leíste hoy */
       --c-run: var(--accent-green);     /* la sesión en curso */
-      --c-top: #ffd54a;                 /* vuelta extra (segunda, tercera...) */
+      --c-top: #3cc6d6;                 /* vuelta extra (segunda, tercera...) */
       --saved: 0deg;
       --total: 0deg;
       --extra: 0deg;
@@ -467,7 +467,8 @@
 
     // El anillo muestra la meta diaria. Cada vuelta completa = una meta; las vueltas extra
     // se dibujan encima con otro color (dorado, azul, violeta...).
-    const COLORES_VUELTA = ['#19d98b', '#ffd54a', '#4cc9f0', '#b388ff'];
+    // Paleta fría y suave, en tono con el verde de la interfaz: verde → turquesa → azul → índigo
+    const COLORES_VUELTA = ['#19d98b', '#3cc6d6', '#5b8def', '#9a86f0'];
     let extraPrevio = 0;
 
     function pintarAnillo(total) {
