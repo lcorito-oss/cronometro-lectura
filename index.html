@@ -214,7 +214,6 @@
     .seg + .seg { border-top: 1px solid rgba(0, 0, 0, 0.35); }
     .barra-dia { font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); }
     .barra-dia.hoy { color: var(--accent-green); }
-    .ritmo-nota { font-size: 0.72rem; line-height: 1.4; color: var(--text-secondary); margin-top: -4px; }
     .ritmo-fila { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 0.9rem; }
 
     /* AVISO AL TERMINAR UN LIBRO */
@@ -327,11 +326,6 @@
             <input type="number" id="metaAnualInput" min="1" inputmode="numeric">
           </div>
         </div>
-        <div class="minutos-group">
-          <label class="selector-label" for="metaBaseInput">Terminados sin cronómetro</label>
-          <input type="number" id="metaBaseInput" min="0" inputmode="numeric">
-        </div>
-        <p class="ritmo-nota">Libros de este año que no registraste aquí. Ej.: si tu Excel dice 37 y arriba ves 3, escribe 34.</p>
       </div>
     </details>
   </div>
@@ -408,8 +402,7 @@
       const metas = leerMetas();
       $('metaDiariaInput').value = metas.diaria;
       $('metaAnualInput').value = metas.anual;
-      $('metaBaseInput').value = metas.base;
-      ['metaDiariaInput', 'metaAnualInput', 'metaBaseInput'].forEach(function(id) {
+      ['metaDiariaInput', 'metaAnualInput'].forEach(function(id) {
         $(id).addEventListener('change', guardarMetas);
       });
       loadResumen();
@@ -997,23 +990,23 @@
     }
 
     // ---- Mi ritmo: gráfica semanal, metas y racha ----
+    // Libros de 2026 que ya habías leído antes de usar el cronómetro.
+    // Solo vale en ese año: desde enero de 2027 se ignora sola.
+    const LIBROS_PREVIOS = { anio: 2026, cantidad: 34 };
+
     function leerMetas() {
       const m = lsGet('metas', {});
-      const anio = new Date().getFullYear();
       return {
         diaria: Number(m.diaria) > 0 ? Number(m.diaria) : 30,
         anual: Number(m.anual) > 0 ? Number(m.anual) : 24,
-        // libros terminados sin el cronómetro; solo vale en el año en que se escribió
-        base: (m.baseAnio === anio && Number(m.base) > 0) ? Number(m.base) : 0
+        base: new Date().getFullYear() === LIBROS_PREVIOS.anio ? LIBROS_PREVIOS.cantidad : 0
       };
     }
 
     function guardarMetas() {
       lsSet('metas', {
         diaria: Number($('metaDiariaInput').value) || 30,
-        anual: Number($('metaAnualInput').value) || 24,
-        base: Math.max(0, Math.floor(Number($('metaBaseInput').value) || 0)),
-        baseAnio: new Date().getFullYear()
+        anual: Number($('metaAnualInput').value) || 24
       });
       renderRitmo();
     }
@@ -1034,12 +1027,28 @@
       return d;
     }
 
-    // Días seguidos leyendo (si hoy aún no lees, cuenta desde ayer)
-    function calcularRacha(d) {
+    // Racha = días seguidos cumpliendo la meta diaria (si hoy aún no la cumples, cuenta desde ayer)
+    function calcularRacha(d, meta) {
       let n = 0;
-      let i = (d[fechaHace(0)] || 0) > 0 ? 0 : 1;
-      while ((d[fechaHace(i)] || 0) > 0 && i < 400) { n++; i++; }
+      let i = (d[fechaHace(0)] || 0) >= meta ? 0 : 1;
+      while ((d[fechaHace(i)] || 0) >= meta && i < 5000) { n++; i++; }
       return n;
+    }
+
+    // Mejor racha de todo el historial, con la meta actual
+    function calcularRecord(d, meta) {
+      const dias = Object.keys(d).sort();
+      if (!dias.length) return 0;
+      const fin = fechaHace(0);
+      const cur = new Date(dias[0] + 'T00:00:00');
+      let mejor = 0;
+      let run = 0;
+      let guardia = 0;
+      while (fechaLocal(cur.getTime()) <= fin && guardia++ < 5000) {
+        if ((d[fechaLocal(cur.getTime())] || 0) >= meta) { run++; if (run > mejor) mejor = run; } else { run = 0; }
+        cur.setDate(cur.getDate() + 1);
+      }
+      return mejor;
     }
 
     function terminadosAnio() {
@@ -1070,8 +1079,10 @@
       const metas = leerMetas();
       const hoy = d[fechaHace(0)] || 0;
       minHoyGuardados = hoy;
-      const racha = calcularRacha(d);
-      $('ritmoResumen').textContent = racha > 0 ? '🔥 ' + racha + (racha === 1 ? ' día' : ' días') : '';
+      const racha = calcularRacha(d, metas.diaria);
+      const record = Math.max(racha, calcularRecord(d, metas.diaria));
+      $('ritmoResumen').textContent = (racha > 0 ? '🔥 ' + racha + (racha === 1 ? ' día' : ' días') : '') +
+        (record > 0 ? (racha > 0 ? ' · ' : '') + 'récord ' + record : '');
 
       const letras = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
       const dias = [];
