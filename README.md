@@ -48,6 +48,7 @@ Si no existe la propiedad `CLAVE`, la app funciona sin clave. Es una protección
 
 - `?libro=Titulo` al final de la dirección abre la app con ese libro seleccionado.
 - `?reset=1` borra la dirección de Apps Script y la clave guardadas en ese dispositivo, para configurarlas de nuevo.
+  
 - Las sesiones guardadas sin conexión aparecen como "pendientes de enviar" hasta que se sincronizan.
 
 ## Actualizar la app
