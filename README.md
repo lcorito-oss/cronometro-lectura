@@ -11,9 +11,9 @@ App para registrar sesiones de lectura: libro, minutos, avance (%) y tiempo rest
 
 ## Mi ritmo, metas y aviso de libro terminado
 
-- **Mi ritmo** (sección plegable al final): gráfica de los últimos 7 días, minutos de hoy contra la meta diaria, total de la semana y la racha de días seguidos leyendo. Cada barra se divide por colores como el anillo: los primeros minutos de la meta en verde, los siguientes en dorado, azul y violeta; un día que no llegó a la meta queda en gris. Una línea punteada marca la meta en cada barra y una leyenda explica los colores.
+- **Mi ritmo** (sección plegable al final): gráfica de los últimos 7 días, minutos de hoy contra la meta diaria, total de la semana y la racha de días seguidos cumpliendo la meta, con tu récord. Cada barra se divide por colores como el anillo: los primeros minutos de la meta en verde, los siguientes en dorado, azul y violeta; un día que no llegó a la meta queda en gris. Una línea punteada marca la meta en cada barra y una leyenda explica los colores.
 - **Metas:** diaria (minutos) y anual (libros). Se guardan en cada dispositivo y se pueden cambiar ahí mismo.
-- **Libros terminados:** cuenta los libros que llegaron al 100 % en la hoja de sesiones durante el año actual, más el número que escribas en *Terminados sin cronómetro* (para igualarlo con tu Excel; se reinicia solo cada año).
+- **Libros terminados:** cuenta los libros que llegaron al 100 % en la hoja de sesiones durante el año actual, más los libros previos al cronómetro que están fijos en el código (`LIBROS_PREVIOS`), que dejan de contar solos al cambiar de año.
 - **Anillo del cronómetro:** muestra la meta diaria. Cada vuelta completa es una meta; las vueltas extra se dibujan encima con otro color (dorado, azul, violeta).
 - **Aviso al terminar:** al guardar una sesión con 100 % aparece una pantalla de felicitación con los minutos de la sesión, el total del libro y cuántos llevas en el año.
 - Todo funciona sin conexión: usa los datos guardados más las sesiones pendientes de enviar.
@@ -48,7 +48,6 @@ Si no existe la propiedad `CLAVE`, la app funciona sin clave. Es una protección
 
 - `?libro=Titulo` al final de la dirección abre la app con ese libro seleccionado.
 - `?reset=1` borra la dirección de Apps Script y la clave guardadas en ese dispositivo, para configurarlas de nuevo.
-  
 - Las sesiones guardadas sin conexión aparecen como "pendientes de enviar" hasta que se sincronizan.
 
 ## Actualizar la app
