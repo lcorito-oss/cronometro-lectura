@@ -90,9 +90,14 @@
       background:
         conic-gradient(var(--c-top) 0deg var(--extra), transparent var(--extra) 360deg),
         conic-gradient(var(--c-saved) 0deg var(--saved), var(--c-run) var(--saved) var(--total), var(--border-color) var(--total) 360deg);
-      transition: --saved 0.8s linear, --total 0.8s linear, --extra 0.8s linear;
+      position: relative;
+      transition: --saved 0.8s linear, --total 0.8s linear, --extra 0.8s linear, padding 0.25s ease, margin 0.25s ease;
     }
-    .ring.running { animation: pulso 2.4s ease-in-out infinite; }
+    /* al correr, el anillo se engrosa hacia afuera (sin mover el contenido) */
+    .ring.running { padding: 5px; margin: -2px -2px 12px; border-radius: 23px; animation: pulso 2.4s ease-in-out infinite; }
+    /* la "cabeza" del gusano: un bulto más ancho en la punta del avance */
+    .ring-head { display: none; position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; pointer-events: none; z-index: 3; transition: transform 0.8s linear; animation: gusano 1.4s ease-in-out infinite; }
+    @keyframes gusano { 0%, 100% { scale: 1; } 50% { scale: 1.3; } }
     .ring.paused { --c-run: var(--accent-amber); }
     .ring.meta-ok { --c-saved: var(--accent-btn); --c-run: var(--accent-btn); box-shadow: 0 0 22px rgba(0, 255, 136, 0.22); }
     .timer-meta { margin-top: 10px; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.5px; color: var(--text-secondary); }
@@ -186,6 +191,7 @@
 
     @media (prefers-reduced-motion: reduce) {
       .ring.running { animation: none; }
+      .ring-head { animation: none; }
       * { transition: none !important; }
     }
 
@@ -214,7 +220,7 @@
     .seg + .seg { border-top: 1px solid rgba(0, 0, 0, 0.35); }
     .barra-dia { font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); }
     .barra-dia.hoy { color: var(--accent-green); }
-    .ritmo .minutos-group input { font-size: 1rem; }
+    .ritmo .minutos-group input { font-size: 1rem; }   /* metas: números como los del tiempo Kindle */
     .ritmo-fila { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 0.9rem; }
 
     /* AVISO AL TERMINAR UN LIBRO */
@@ -260,6 +266,7 @@
         <div class="digits" id="timer">00:00:00</div>
         <div class="timer-meta" id="timerMeta"></div>
       </div>
+      <div class="ring-head" id="ringHead"></div>
     </div>
 
     <div class="controls">
@@ -464,6 +471,26 @@
     // Meta = verde de la interfaz; las vueltas extra, en escala de grises (de claro a oscuro)
     const COLORES_VUELTA = ['#19d98b', '#9fa4b5', '#737990', '#4e546a'];
     let extraPrevio = 0;
+    let gradosPrevio = 0;
+
+    // Punto del borde de un rectángulo redondeado (centrado en 0,0) hacia el que apunta
+    // el ángulo "grados" (0 = arriba, sentido de las manecillas)
+    function puntoEnAnillo(w, h, r, grados) {
+      const th = grados * Math.PI / 180;
+      const dx = Math.sin(th), dy = -Math.cos(th);
+      const hx = w / 2, hy = h / 2;
+      let t = Infinity;
+      if (Math.abs(dx) > 1e-9) t = Math.min(t, hx / Math.abs(dx));
+      if (Math.abs(dy) > 1e-9) t = Math.min(t, hy / Math.abs(dy));
+      let x = dx * t, y = dy * t;
+      if (Math.abs(x) > hx - r && Math.abs(y) > hy - r) {       // cae en una esquina redondeada
+        const cx = (hx - r) * Math.sign(x), cy = (hy - r) * Math.sign(y);
+        const b = cx * dx + cy * dy;
+        const disc = b * b - (cx * cx + cy * cy - r * r);
+        if (disc >= 0) { t = b + Math.sqrt(disc); x = dx * t; y = dy * t; }
+      }
+      return { x: x, y: y };
+    }
 
     function pintarAnillo(total) {
       const meta = leerMetas().diaria;
@@ -490,6 +517,23 @@
       ring.style.transition = extra < extraPrevio ? 'none' : '';   // al empezar otra vuelta no "rebobina"
       extraPrevio = extra;
       ring.style.setProperty('--extra', extra + 'deg');
+
+      // "Gusano": mientras corre el cronómetro, una cabeza más ancha camina por la punta del avance
+      const head = $('ringHead');
+      if (isRunning) {
+        const g = 5;                                                   // grosor del anillo al correr
+        const w = $('timerDisplay').offsetWidth + g;                   // línea central del anillo
+        const h = $('timerDisplay').offsetHeight + g;
+        const grados = vueltas >= 1 ? extra : r * 360;
+        const p = puntoEnAnillo(w, h, 18 + g / 2, grados);
+        head.style.transition = grados < gradosPrevio ? 'none' : '';  // al cerrar una vuelta no cruza el anillo
+        gradosPrevio = grados;
+        head.style.transform = 'translate(' + p.x + 'px,' + p.y + 'px)';
+        head.style.background = vueltas >= 1 ? COLORES_VUELTA[vueltas % 4] : 'var(--accent-green)';
+        head.style.display = 'block';
+      } else {
+        head.style.display = 'none';
+      }
 
       const cumplida = vueltas >= 1;
       const acum = Math.floor(hoy + sesion);
