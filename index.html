@@ -74,32 +74,23 @@
     .progress-bar-gain { left: 0; width: 0%; background-color: var(--accent-gain); opacity: 0.55; }
     .progress-pill { background-color: rgba(0, 255, 136, 0.12); color: var(--accent-green); padding: 2px 8px; border-radius: 8px; font-weight: 700; font-size: 0.8rem; }
 
-    @property --saved { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
-    @property --total { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
-    @property --extra { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
     .ring {
+      position: relative;
       padding: 3px;
       border-radius: 21px;
       margin-bottom: 14px;
-      --c-saved: #138a5f;               /* lo que ya leíste hoy */
-      --c-run: var(--accent-green);     /* la sesión en curso */
-      --c-top: #9fa4b5;                 /* vuelta extra (segunda, tercera...) */
-      --saved: 0deg;
-      --total: 0deg;
-      --extra: 0deg;
-      background:
-        conic-gradient(var(--c-top) 0deg var(--extra), transparent var(--extra) 360deg),
-        conic-gradient(var(--c-saved) 0deg var(--saved), var(--c-run) var(--saved) var(--total), var(--border-color) var(--total) 360deg);
-      position: relative;
-      transition: --saved 0.8s linear, --total 0.8s linear, --extra 0.8s linear, padding 0.25s ease, margin 0.25s ease;
+      background: var(--border-color);
+      transition: padding 0.25s ease, margin 0.25s ease;
     }
     /* al correr, el anillo se engrosa hacia afuera (sin mover el contenido) */
     .ring.running { padding: 5px; margin: -2px -2px 12px; border-radius: 23px; animation: pulso 2.4s ease-in-out infinite; }
-    /* la "cabeza" del gusano: un bulto más ancho en la punta del avance */
-    .ring-head { display: none; position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; pointer-events: none; z-index: 3; transition: transform 0.8s linear; animation: gusano 1.4s ease-in-out infinite; }
-    @keyframes gusano { 0%, 100% { scale: 1; } 50% { scale: 1.3; } }
-    .ring.paused { --c-run: var(--accent-amber); }
-    .ring.meta-ok { --c-saved: var(--accent-btn); --c-run: var(--accent-btn); box-shadow: 0 0 22px rgba(0, 255, 136, 0.22); }
+    .ring.meta-ok { box-shadow: 0 0 22px rgba(0, 255, 136, 0.22); }
+    /* el anillo es una barra de progreso dibujada sobre el borde; en la punta se ensancha */
+    .ring-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; overflow: visible; }
+    .ring-svg path { fill: none; stroke-linecap: butt; transition: stroke-dasharray 0.8s linear, stroke-dashoffset 0.8s linear, stroke-width 0.25s ease; }
+    .ring-svg path.rb { stroke-linecap: round; }
+    .ring-svg.sin-anim path { transition: none; }
+    #rTrack { stroke: var(--border-color); }
     .timer-meta { margin-top: 10px; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.5px; color: var(--text-secondary); }
     .timer-meta.ok { color: var(--accent-green); }
     .timer-display { background-color: #111216; border-radius: 18px; padding: 20px 12px; text-align: center; }
@@ -191,7 +182,6 @@
 
     @media (prefers-reduced-motion: reduce) {
       .ring.running { animation: none; }
-      .ring-head { animation: none; }
       * { transition: none !important; }
     }
 
@@ -266,7 +256,20 @@
         <div class="digits" id="timer">00:00:00</div>
         <div class="timer-meta" id="timerMeta"></div>
       </div>
-      <div class="ring-head" id="ringHead"></div>
+      <svg class="ring-svg" id="ringSvg" aria-hidden="true" preserveAspectRatio="none">
+        <path id="rTrack" pathLength="100"/>
+        <path id="rBase" pathLength="100"/>
+        <path id="rRun" pathLength="100"/>
+        <path id="rTop" pathLength="100"/>
+        <path class="rb" id="rB1" pathLength="100"/>
+        <path class="rb" id="rB2" pathLength="100"/>
+        <path class="rb" id="rB3" pathLength="100"/>
+        <path class="rb" id="rB4" pathLength="100"/>
+        <path class="rb" id="rB5" pathLength="100"/>
+        <path class="rb" id="rB6" pathLength="100"/>
+        <path class="rb" id="rB7" pathLength="100"/>
+        <path class="rb" id="rB8" pathLength="100"/>
+      </svg>
     </div>
 
     <div class="controls">
@@ -414,6 +417,7 @@
         $(id).addEventListener('change', guardarMetas);
       });
       loadResumen();
+      if (window.ResizeObserver) new ResizeObserver(function() { pintarAnillo(elapsedSeconds()); }).observe($('timerDisplay'));
       setInterval(function() { if (leerCola().length) sincronizar(); }, 60000);
 
       if ('serviceWorker' in navigator) {
@@ -466,30 +470,35 @@
       pintarAnillo(total);
     }
 
-    // El anillo muestra la meta diaria. Cada vuelta completa = una meta; las vueltas extra
-    // se dibujan encima con otro color (dorado, azul, violeta...).
-    // Meta = verde de la interfaz; las vueltas extra, en escala de grises (de claro a oscuro)
+    // El anillo es una barra de progreso sobre el borde del reloj: la meta diaria recorre el perímetro.
+    // Cada vuelta completa = una meta; las vueltas extra se dibujan encima con otro color.
+    // Mientras corre el cronómetro, la punta del avance se ensancha (como si los píxeles se expandieran).
     const COLORES_VUELTA = ['#19d98b', '#9fa4b5', '#737990', '#4e546a'];
-    let extraPrevio = 0;
-    let gradosPrevio = 0;
+    const IDS_ANILLO = ['rTrack', 'rBase', 'rRun', 'rTop', 'rB1', 'rB2', 'rB3', 'rB4', 'rB5', 'rB6', 'rB7', 'rB8'];
+    const LARGO_PUNTA = [0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01];   // fracción del perímetro de cada capa de la punta
+    const ENSANCHE_PUNTA = [0.8, 1.6, 2.4, 3.2, 4, 4.8, 5.6, 6.4];   // píxeles extra de grosor de cada capa
+    let trazoPrevio = '';
+    let posPrevia = 0;
 
-    // Punto del borde de un rectángulo redondeado (centrado en 0,0) hacia el que apunta
-    // el ángulo "grados" (0 = arriba, sentido de las manecillas)
-    function puntoEnAnillo(w, h, r, grados) {
-      const th = grados * Math.PI / 180;
-      const dx = Math.sin(th), dy = -Math.cos(th);
-      const hx = w / 2, hy = h / 2;
-      let t = Infinity;
-      if (Math.abs(dx) > 1e-9) t = Math.min(t, hx / Math.abs(dx));
-      if (Math.abs(dy) > 1e-9) t = Math.min(t, hy / Math.abs(dy));
-      let x = dx * t, y = dy * t;
-      if (Math.abs(x) > hx - r && Math.abs(y) > hy - r) {       // cae en una esquina redondeada
-        const cx = (hx - r) * Math.sign(x), cy = (hy - r) * Math.sign(y);
-        const b = cx * dx + cy * dy;
-        const disc = b * b - (cx * cx + cy * cy - r * r);
-        if (disc >= 0) { t = b + Math.sqrt(disc); x = dx * t; y = dy * t; }
-      }
-      return { x: x, y: y };
+    // Rectángulo redondeado (línea central del anillo) que empieza arriba al centro y gira en sentido horario
+    function trazoAnillo(W, H, g) {
+      const x0 = g / 2, y0 = g / 2, x1 = W - g / 2, y1 = H - g / 2, r = 18 + g / 2, cx = W / 2;
+      return 'M' + cx + ',' + y0 + ' H' + (x1 - r) + ' A' + r + ',' + r + ' 0 0 1 ' + x1 + ',' + (y0 + r) +
+        ' V' + (y1 - r) + ' A' + r + ',' + r + ' 0 0 1 ' + (x1 - r) + ',' + y1 +
+        ' H' + (x0 + r) + ' A' + r + ',' + r + ' 0 0 1 ' + x0 + ',' + (y1 - r) +
+        ' V' + (y0 + r) + ' A' + r + ',' + r + ' 0 0 1 ' + (x0 + r) + ',' + y0 + ' H' + cx;
+    }
+
+    // Dibuja el tramo [ini, fin] (fracciones 0..1 del perímetro)
+    function tramo(id, ini, fin, color, grosor) {
+      const el = $(id);
+      const len = Math.max(0, fin - ini) * 100;
+      if (len < 0.05) { el.style.display = 'none'; return; }
+      el.style.display = '';
+      el.style.stroke = color;
+      el.style.strokeWidth = grosor + 'px';
+      el.style.strokeDasharray = len + ' ' + Math.max(0.001, 100 - len);
+      el.style.strokeDashoffset = String(-ini * 100);
     }
 
     function pintarAnillo(total) {
@@ -500,39 +509,49 @@
       const vueltas = Math.floor(r);
       const ring = $('ring');
 
-      let extra = 0;
-      if (vueltas >= 1) {
-        extra = (r - vueltas) * 360;
-        ring.style.setProperty('--saved', '360deg');
-        ring.style.setProperty('--total', '360deg');
-        ring.style.setProperty('--c-saved', COLORES_VUELTA[(vueltas - 1) % 4]);
-        ring.style.setProperty('--c-run', COLORES_VUELTA[(vueltas - 1) % 4]);
-        ring.style.setProperty('--c-top', COLORES_VUELTA[vueltas % 4]);
-      } else {
-        ring.style.setProperty('--saved', (hoy / meta * 360) + 'deg');
-        ring.style.setProperty('--total', (r * 360) + 'deg');
-        ring.style.removeProperty('--c-saved');
-        ring.style.removeProperty('--c-run');
+      // Geometría: el SVG mide lo mismo que el anillo (reloj + grosor a cada lado)
+      const g = isRunning ? 5 : 3;
+      const W = $('timerDisplay').offsetWidth + 2 * g;
+      const H = $('timerDisplay').offsetHeight + 2 * g;
+      const svg = $('ringSvg');
+      svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+      const d = trazoAnillo(W, H, g);
+      if (d !== trazoPrevio) {
+        IDS_ANILLO.forEach(function(id) { $(id).setAttribute('d', d); });
+        trazoPrevio = d;
       }
-      ring.style.transition = extra < extraPrevio ? 'none' : '';   // al empezar otra vuelta no "rebobina"
-      extraPrevio = extra;
-      ring.style.setProperty('--extra', extra + 'deg');
+      $('rTrack').style.strokeWidth = g + 'px';
 
-      // "Gusano": mientras corre el cronómetro, una cabeza más ancha camina por la punta del avance
-      const head = $('ringHead');
-      if (isRunning) {
-        const g = 5;                                                   // grosor del anillo al correr
-        const w = $('timerDisplay').offsetWidth + g;                   // línea central del anillo
-        const h = $('timerDisplay').offsetHeight + g;
-        const grados = vueltas >= 1 ? extra : r * 360;
-        const p = puntoEnAnillo(w, h, 18 + g / 2, grados);
-        head.style.transition = grados < gradosPrevio ? 'none' : '';  // al cerrar una vuelta no cruza el anillo
-        gradosPrevio = grados;
-        head.style.transform = 'translate(' + p.x + 'px,' + p.y + 'px)';
-        head.style.background = vueltas >= 1 ? COLORES_VUELTA[vueltas % 4] : 'var(--accent-green)';
-        head.style.display = 'block';
+      // Tramos de color y posición de la punta (fracción del perímetro)
+      let cabeza;
+      let colorCabeza;
+      if (vueltas >= 1) {
+        const extra = r - vueltas;
+        tramo('rBase', 0, 1, COLORES_VUELTA[(vueltas - 1) % 4], g);
+        tramo('rRun', 0, 0, '', g);
+        tramo('rTop', 0, extra, COLORES_VUELTA[vueltas % 4], g);
+        cabeza = extra;
+        colorCabeza = COLORES_VUELTA[vueltas % 4];
       } else {
-        head.style.display = 'none';
+        const guardado = Math.min(1, hoy / meta);
+        tramo('rBase', 0, guardado, '#138a5f', g);                                     // lo ya leído hoy
+        tramo('rRun', guardado, r, isRunning ? 'var(--accent-green)' : 'var(--accent-amber)', g);   // sesión en curso / en pausa
+        tramo('rTop', 0, 0, '', g);
+        cabeza = r;
+        colorCabeza = 'var(--accent-green)';
+      }
+
+      // Al cerrar una vuelta (o al guardar) el avance "salta" atrás: sin animación para que no rebobine
+      if (cabeza < posPrevia - 0.01) {
+        svg.classList.add('sin-anim');
+        requestAnimationFrame(function() { requestAnimationFrame(function() { svg.classList.remove('sin-anim'); }); });
+      }
+      posPrevia = cabeza;
+
+      // La punta: capas cada vez más cortas y más gruesas que terminan en el avance
+      for (let i = 0; i < 8; i++) {
+        if (isRunning) tramo('rB' + (i + 1), cabeza - LARGO_PUNTA[i], cabeza, colorCabeza, g + ENSANCHE_PUNTA[i]);
+        else $('rB' + (i + 1)).style.display = 'none';
       }
 
       const cumplida = vueltas >= 1;
