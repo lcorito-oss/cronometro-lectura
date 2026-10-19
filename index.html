@@ -222,6 +222,36 @@
     .fin-card p { color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4; }
     #finLibro { color: var(--text-primary); font-weight: 700; }
     .fin-card button { margin-top: 8px; }
+
+    /* ===== ESTILO: borde con degradado en botones y cajas; cajas con el mismo fondo que los botones ===== */
+    :root {
+      --grad-caja: linear-gradient(135deg, rgba(25, 217, 139, 0.4), #2e3142 45%, rgba(159, 164, 181, 0.4));
+      --grad-boton: linear-gradient(120deg, #19d98b, #9fa4b5 60%, #4e546a);
+      --grad-rojo: linear-gradient(120deg, #ff4757, #b23a48 60%, #5a2a33);
+      --grad-foco: linear-gradient(var(--accent-green), var(--accent-green));
+    }
+    .book-selector-container, .kpi-card, .input-group, .minutos-group {
+      background: linear-gradient(var(--card-bg), var(--card-bg)) padding-box, var(--grad-caja) border-box;
+      border: 1px solid transparent;
+    }
+    .input-group:focus-within, .minutos-group:focus-within {
+      background: linear-gradient(var(--card-bg), var(--card-bg)) padding-box, var(--grad-foco) border-box;
+    }
+    .text-input, .kindle-fields input { background-color: var(--bg-color); }   /* campos hundidos dentro de las cajas */
+
+    .btn-start, .btn-save, .btn-stop, .btn-ghost, .btn-retry, .btn-quick {
+      color: var(--text-primary);
+      background: linear-gradient(var(--card-bg), var(--card-bg)) padding-box, var(--grad-boton) border-box;
+      border: 1.5px solid transparent;
+    }
+    .btn-start, .btn-save, .btn-stop { padding: 12.5px; }
+    .btn-ghost { padding: 12.5px 14.5px; color: var(--text-secondary); }
+    .btn-stop { background: linear-gradient(var(--card-bg), var(--card-bg)) padding-box, var(--grad-rojo) border-box; }
+    .btn-retry { color: var(--accent-green); }
+    .btn-quick { border-width: 1px; color: var(--accent-green); }
+    /* Iniciar / Continuar: contorno brillante para que sea la acción principal */
+    .btn-start { box-shadow: 0 0 16px rgba(25, 217, 139, 0.30), inset 0 0 10px rgba(25, 217, 139, 0.08); }
+    .btn-start:active { box-shadow: 0 0 8px rgba(25, 217, 139, 0.25), inset 0 0 10px rgba(25, 217, 139, 0.08); }
   </style>
 </head>
 <body>
