@@ -559,7 +559,7 @@
 
     function pintarAnillo(total) {
       const meta = leerMetas().diaria;
-      const sesion = total / 60;
+      const sesion = (segundosCronoPorFecha()[fechaLocal(Date.now())] || 0) / 60;
       const hoy = minHoyGuardados;
       const r = (hoy + sesion) / meta;                  // 1 = meta cumplida, 2 = el doble...
       const vueltas = Math.floor(r);
@@ -1093,10 +1093,15 @@
       }
     }
 
-    // Devuelve los minutos enteros de cada fecha; su suma coincide con el total del cronómetro.
-    function minutosPorFechaCrono() {
+    function segundosCronoPorFecha() {
       const segundos = Object.assign({}, segundosPorDia);
       if (isRunning) sumarIntervaloPorDia(startMs, Date.now(), segundos);
+      return segundos;
+    }
+
+    // Devuelve los minutos enteros de cada fecha; su suma coincide con el total del cronómetro.
+    function minutosPorFechaCrono() {
+      const segundos = segundosCronoPorFecha();
       const fechas = Object.keys(segundos).filter(f => segundos[f] > 0).sort();
       if (!fechas.length) return [];
 
