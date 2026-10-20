@@ -63,6 +63,7 @@
     }
     select, input { width: 100%; background-color: transparent; color: var(--text-primary); border: none; outline: none; font-size: 1rem; font-weight: 600; }
     select:focus-visible { outline: 2px solid var(--accent-green); outline-offset: 2px; border-radius: 6px; }
+    select:disabled { opacity: 0.65; cursor: not-allowed; }
     select option { background-color: var(--card-bg); color: var(--text-primary); }
     .text-input { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 12px; font-size: 1rem; margin-top: 6px; color: #ffffff; }
     .text-input:focus { border-color: var(--accent-green); }
@@ -264,6 +265,7 @@
         <option value="">Cargando libros...</option>
       </select>
       <button type="button" class="btn-retry" id="retryBooksBtn" onclick="loadBooks(getSelectedBookTitle() || null)">Reintentar</button>
+      <small id="bookLockHint" hidden style="color: var(--text-secondary); font-size: 0.72rem;">El libro queda fijado durante la sesión. Pulsa «Descartar» para cambiarlo.</small>
 
       <div id="newBookInputContainer" style="display: none;">
         <input type="text" id="newBookTitleInput" class="text-input" placeholder="Escribe el nombre del libro..." aria-label="Nombre del libro nuevo">
@@ -415,6 +417,7 @@
     let paramAplicado = false;
     let timerInterval = null;
     let seconds = 0;
+    let libroSesion = '';
     let startMs = 0;
     let isRunning = false;
     let booksData = [];
@@ -497,6 +500,10 @@
       $('timer').classList.toggle('running', isRunning);
       $('timer').classList.toggle('paused', pausado);
       $('discardBtn').style.display = total > 0 ? 'block' : 'none';
+      const libroBloqueado = isRunning || seconds > 0;
+      $('bookSelect').disabled = libroBloqueado;
+      $('newBookTitleInput').disabled = libroBloqueado;
+      $('bookLockHint').hidden = !libroBloqueado;
       pintarAnillo(total);
     }
 
@@ -643,6 +650,7 @@
         startMs: startMs,
         seconds: seconds,
         libro: $('bookSelect').value,
+        libroSesion: libroSesion,
         nuevo: $('newBookTitleInput').value
       });
     }
@@ -655,6 +663,7 @@
         seconds = Number(est.seconds) || 0;
         isRunning = !!est.isRunning;
         startMs = Number(est.startMs) || 0;
+        libroSesion = est.libroSesion || (est.libro === '__NEW__' ? est.nuevo : est.libro) || '';
         if (elapsedSeconds() > MAX_HORAS * 3600) {
           resetTimer();
           toast('Se descartó un cronómetro de más de ' + MAX_HORAS + ' h.');
@@ -832,6 +841,7 @@
 
     function getSelectedBookTitle() {
       const selectValue = $('bookSelect').value;
+      if ((isRunning || seconds > 0) && libroSesion) return libroSesion;
       if (selectValue === '__NEW__') {
         return $('newBookTitleInput').value.trim();
       }
@@ -883,6 +893,13 @@
       vibrar();
 
       if (!isRunning) {
+        if (seconds === 0) {
+          libroSesion = getSelectedBookTitle();
+          if (!libroSesion) {
+            toast('Selecciona o escribe un libro antes de iniciar.');
+            return;
+          }
+        }
         isRunning = true;
         startMs = Date.now();
         btn.innerText = 'Pausar';
@@ -904,6 +921,7 @@
       isRunning = false;
       seconds = 0;
       startMs = 0;
+      libroSesion = '';
       minsManual = false;
       const btn = $('startBtn');
       btn.innerText = 'Iniciar Cronómetro';
