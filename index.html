@@ -585,10 +585,17 @@
       }
       posPrevia = cabeza;
 
-      // La punta: capas cada vez más cortas y más gruesas que terminan en el avance
+      // La punta: capas cada vez más cortas y más gruesas que terminan en el avance.
+      // La capa final lleva un halo del mismo color para que el ojo siga el movimiento.
       for (let i = 0; i < 8; i++) {
-        if (isRunning) tramo('rB' + (i + 1), cabeza - LARGO_PUNTA[i], cabeza, colorCabeza, g + ENSANCHE_PUNTA[i]);
-        else $('rB' + (i + 1)).style.display = 'none';
+        const punta = $('rB' + (i + 1));
+        if (isRunning) {
+          tramo('rB' + (i + 1), cabeza - LARGO_PUNTA[i], cabeza, colorCabeza, g + ENSANCHE_PUNTA[i]);
+          punta.style.filter = i === 7 ? 'drop-shadow(0 0 4px ' + colorCabeza + ')' : '';
+        } else {
+          punta.style.display = 'none';
+          punta.style.filter = '';
+        }
       }
 
       const cumplida = vueltas >= 1;
