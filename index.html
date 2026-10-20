@@ -774,9 +774,11 @@
       }
 
       if (!navigator.onLine) {
+        retryBtn.style.display = 'block';
         if (!cache) {
           $('bookSelect').innerHTML = '<option value="">Sin conexión y sin lista guardada</option>';
-          retryBtn.style.display = 'block';
+        } else {
+          toast('Sin conexión. Se muestra la lista guardada; se actualizará al reconectar.');
         }
         return;
       }
@@ -799,10 +801,13 @@
         else loadMetrics();
       } catch (err) {
         console.error('Error al cargar libros:', err);
+        // Siempre se permite reintentar, incluso si mostramos datos guardados.
+        retryBtn.style.display = 'block';
         if (!cache) {
           $('bookSelect').innerHTML = '<option value="">No se pudieron cargar los libros</option>';
-          retryBtn.style.display = 'block';
-          toast('Error al cargar los libros.');
+          toast('No se pudieron cargar los libros. Comprueba la conexión e inténtalo de nuevo.');
+        } else {
+          toast('No se pudieron actualizar los libros. Se conserva la lista guardada; puedes reintentar.');
         }
       }
     }
