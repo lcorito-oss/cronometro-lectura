@@ -1111,7 +1111,7 @@
         return { fecha: fecha, minutos: base, resto: exactos - base };
       });
       const totalSegundos = fechas.reduce((suma, fecha) => suma + segundos[fecha], 0);
-      const totalMinutos = Math.round(totalSegundos / 60);
+      const totalMinutos = Math.max(1, Math.round(totalSegundos / 60));
       let restantes = totalMinutos - partes.reduce((suma, p) => suma + p.minutos, 0);
       const porResto = partes.slice().sort((a, b) => b.resto - a.resto || a.fecha.localeCompare(b.fecha));
       for (let i = 0; i < restantes && i < porResto.length; i++) porResto[i].minutos++;
