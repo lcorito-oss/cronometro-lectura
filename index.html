@@ -436,6 +436,8 @@
     let timerInterval = null;
     let seconds = 0;
     let segundosPorDia = {};   // segundos reales del cronómetro agrupados por fecha local
+    let alarmaAudio = null;
+    let ultimaAlertaMedianoche = '';
     let libroSesion = '';
     let startMs = 0;
     let isRunning = false;
@@ -506,6 +508,56 @@
 
     function vibrar() {
       try { if (navigator.vibrate) navigator.vibrate(15); } catch (e) {}
+    }
+
+    // Se prepara tras un toque del usuario para que el navegador permita el sonido después.
+    function prepararAudio() {
+      const AudioContextLocal = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextLocal) return;
+      try {
+        if (!alarmaAudio || alarmaAudio.state === 'closed') alarmaAudio = new AudioContextLocal();
+        if (alarmaAudio.state === 'suspended') alarmaAudio.resume().catch(function() {});
+      } catch (e) {}
+    }
+
+    function sonarAlarmaMedianoche() {
+      if (!alarmaAudio) return;
+      const tocar = function() {
+        if (!alarmaAudio || alarmaAudio.state !== 'running') return;
+        const base = alarmaAudio.currentTime + 0.03;
+        [740, 880, 740].forEach(function(frecuencia, indice) {
+          const inicio = base + indice * 0.42;
+          const tono = alarmaAudio.createOscillator();
+          const volumen = alarmaAudio.createGain();
+          tono.type = 'sine';
+          tono.frequency.setValueAtTime(frecuencia, inicio);
+          volumen.gain.setValueAtTime(0.0001, inicio);
+          volumen.gain.exponentialRampToValueAtTime(0.16, inicio + 0.025);
+          volumen.gain.exponentialRampToValueAtTime(0.0001, inicio + 0.24);
+          tono.connect(volumen);
+          volumen.connect(alarmaAudio.destination);
+          tono.start(inicio);
+          tono.stop(inicio + 0.26);
+        });
+      };
+      try {
+        if (alarmaAudio.state === 'suspended') alarmaAudio.resume().then(tocar).catch(function() {});
+        else tocar();
+      } catch (e) {}
+    }
+
+    function revisarAvisoMedianoche() {
+      if (!isRunning || !startMs) return;
+      const hoy = fechaLocal(Date.now());
+      if (fechaLocal(startMs) >= hoy || ultimaAlertaMedianoche === hoy) return;
+
+      ultimaAlertaMedianoche = hoy;
+      guardarEstado();
+      toast('⏰ Medianoche: anota tu avance de hoy. El cronómetro sigue corriendo.');
+      try {
+        if (navigator.vibrate) navigator.vibrate([180, 80, 180, 80, 300]);
+      } catch (e) {}
+      sonarAlarmaMedianoche();
     }
 
     function elapsedSeconds() {
@@ -651,6 +703,7 @@
         $('manualMinutesInput').value = total > 0 ? Math.max(1, Math.round(total / 60)) : '';
       }
       aplicarEstadoVisual(total);
+      revisarAvisoMedianoche();
       actualizarGuardar();
     }
 
@@ -676,6 +729,7 @@
         startMs: startMs,
         seconds: seconds,
         segundosPorDia: segundosPorDia,
+        ultimaAlertaMedianoche: ultimaAlertaMedianoche,
         libro: $('bookSelect').value,
         libroSesion: libroSesion,
         nuevo: $('newBookTitleInput').value
@@ -688,6 +742,7 @@
       let seleccionar = null;
       if (est && (est.isRunning || Number(est.seconds) > 0)) {
         seconds = Number(est.seconds) || 0;
+        ultimaAlertaMedianoche = String(est.ultimaAlertaMedianoche || '');
         segundosPorDia = est.segundosPorDia && typeof est.segundosPorDia === 'object' && !Array.isArray(est.segundosPorDia)
           ? est.segundosPorDia : {};
         // Los relojes iniciados con una versión anterior no guardaban el reparto por día.
@@ -922,6 +977,7 @@
     function toggleTimer() {
       const btn = $('startBtn');
       vibrar();
+      prepararAudio();
 
       if (!isRunning) {
         if (seconds === 0) {
