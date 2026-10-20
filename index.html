@@ -692,7 +692,7 @@
       actualizarPendientes();
       renderRitmo();
       toast(navigator.onLine
-        ? 'Avance guardado para el día anterior. La sesión continúa.'
+        ? 'Avance guardado para ' + pendiente.fecha + '. La sesión continúa.'
         : 'Avance guardado en este dispositivo; se enviará al reconectar.');
       sincronizar();
     }
@@ -1408,11 +1408,13 @@
         sincronizando = false;
         actualizarPendientes();
       }
-      if (enviadas || avancesEnviados) {
-        const mensajes = [];
-        if (enviadas) mensajes.push(enviadas + (enviadas === 1 ? ' sesión' : ' sesiones'));
-        if (avancesEnviados) mensajes.push(avancesEnviados + (avancesEnviados === 1 ? ' avance' : ' avances'));
-        toast(mensajes.join(' y ') + ' sincronizado' + (enviadas + avancesEnviados === 1 ? '.' : 's.'));
+      if (enviadas && avancesEnviados) {
+        toast(enviadas + (enviadas === 1 ? ' sesión y ' : ' sesiones y ') +
+          avancesEnviados + (avancesEnviados === 1 ? ' avance sincronizados.' : ' avances sincronizados.'));
+      } else if (avancesEnviados) {
+        toast(avancesEnviados + (avancesEnviados === 1 ? ' avance sincronizado.' : ' avances sincronizados.'));
+      } else if (enviadas) {
+        toast(enviadas === 1 ? 'Sesión sincronizada.' : enviadas + ' sesiones sincronizadas.');
       }
       if ((enviadas || avancesEnviados) && !leerCola().length) {
         loadBooks($('bookSelect').value || null);
