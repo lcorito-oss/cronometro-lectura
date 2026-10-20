@@ -435,6 +435,7 @@
     let paramAplicado = false;
     let timerInterval = null;
     let seconds = 0;
+    let segundosPorDia = {};   // segundos reales del cronómetro agrupados por fecha local
     let libroSesion = '';
     let startMs = 0;
     let isRunning = false;
@@ -558,7 +559,7 @@
 
     function pintarAnillo(total) {
       const meta = leerMetas().diaria;
-      const sesion = total / 60;
+      const sesion = (segundosCronoPorFecha()[fechaLocal(Date.now())] || 0) / 60;
       const hoy = minHoyGuardados;
       const r = (hoy + sesion) / meta;                  // 1 = meta cumplida, 2 = el doble...
       const vueltas = Math.floor(r);
@@ -674,6 +675,7 @@
         isRunning: isRunning,
         startMs: startMs,
         seconds: seconds,
+        segundosPorDia: segundosPorDia,
         libro: $('bookSelect').value,
         libroSesion: libroSesion,
         nuevo: $('newBookTitleInput').value
@@ -686,6 +688,10 @@
       let seleccionar = null;
       if (est && (est.isRunning || Number(est.seconds) > 0)) {
         seconds = Number(est.seconds) || 0;
+        segundosPorDia = est.segundosPorDia && typeof est.segundosPorDia === 'object' && !Array.isArray(est.segundosPorDia)
+          ? est.segundosPorDia : {};
+        // Los relojes iniciados con una versión anterior no guardaban el reparto por día.
+        if (!est.segundosPorDia && seconds > 0) segundosPorDia[fechaLocal(Date.now())] = seconds;
         isRunning = !!est.isRunning;
         startMs = Number(est.startMs) || 0;
         libroSesion = est.libroSesion || (est.libro === '__NEW__' ? est.nuevo : est.libro) || '';
@@ -920,6 +926,7 @@
       if (!isRunning) {
         if (seconds === 0) {
           libroSesion = getSelectedBookTitle();
+          segundosPorDia = {};
           if (!libroSesion) {
             toast('Selecciona o escribe un libro antes de iniciar.');
             return;
@@ -931,7 +938,9 @@
         btn.className = 'btn-stop';
         timerInterval = setInterval(pintarReloj, 1000);
       } else {
-        seconds = elapsedSeconds();
+        const ahora = Date.now();
+        sumarIntervaloPorDia(startMs, ahora, segundosPorDia);
+        seconds += Math.floor((ahora - startMs) / 1000);
         isRunning = false;
         clearInterval(timerInterval);
         btn.innerText = 'Continuar Cronómetro';
@@ -945,6 +954,7 @@
       clearInterval(timerInterval);
       isRunning = false;
       seconds = 0;
+      segundosPorDia = {};
       startMs = 0;
       libroSesion = '';
       minsManual = false;
@@ -1026,8 +1036,12 @@
         minutes: minutes,
         progress: progress,
         kindleFalta: kindleFalta,
-        fecha: fechaLocal(Date.now())
+        fecha: fechaLocal(Date.now()),
+        partes: (!minsManual && elapsedSeconds() > 0) ? minutosPorFechaCrono() : null
       };
+      if (Array.isArray(sesion.partes) && sesion.partes.length) {
+        sesion.minutes = sesion.partes.reduce((suma, parte) => suma + parte.minutos, 0);
+      }
 
       // Siempre se guarda primero en este dispositivo; después se envía a la hoja
       const cola = leerCola();
@@ -1063,6 +1077,45 @@
     function fechaLocal(ts) {
       const d = new Date(ts);
       return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    // Suma un tramo activo del cronómetro y lo corta en cada medianoche local.
+    function sumarIntervaloPorDia(inicio, fin, destino) {
+      let cursor = Number(inicio);
+      const limite = Number(fin);
+      while (cursor < limite) {
+        const dia = new Date(cursor);
+        const medianocheSiguiente = new Date(dia.getFullYear(), dia.getMonth(), dia.getDate() + 1).getTime();
+        const corte = Math.min(limite, medianocheSiguiente);
+        const fecha = fechaLocal(cursor);
+        destino[fecha] = (destino[fecha] || 0) + (corte - cursor) / 1000;
+        cursor = corte;
+      }
+    }
+
+    function segundosCronoPorFecha() {
+      const segundos = Object.assign({}, segundosPorDia);
+      if (isRunning) sumarIntervaloPorDia(startMs, Date.now(), segundos);
+      return segundos;
+    }
+
+    // Devuelve los minutos enteros de cada fecha; su suma coincide con el total del cronómetro.
+    function minutosPorFechaCrono() {
+      const segundos = segundosCronoPorFecha();
+      const fechas = Object.keys(segundos).filter(f => segundos[f] > 0).sort();
+      if (!fechas.length) return [];
+
+      const partes = fechas.map(function(fecha) {
+        const exactos = segundos[fecha] / 60;
+        const base = Math.floor(exactos);
+        return { fecha: fecha, minutos: base, resto: exactos - base };
+      });
+      const totalSegundos = fechas.reduce((suma, fecha) => suma + segundos[fecha], 0);
+      const totalMinutos = Math.max(1, Math.round(totalSegundos / 60));
+      let restantes = totalMinutos - partes.reduce((suma, p) => suma + p.minutos, 0);
+      const porResto = partes.slice().sort((a, b) => b.resto - a.resto || a.fecha.localeCompare(b.fecha));
+      for (let i = 0; i < restantes && i < porResto.length; i++) porResto[i].minutos++;
+      return partes.map(({ fecha, minutos }) => ({ fecha: fecha, minutos: minutos }));
     }
 
     function actualizarPendientes() {
@@ -1116,7 +1169,7 @@
           const x = cola[0];
           let r;
           try {
-            r = await apiPost({ action: 'guardar', id: x.id, bookTitle: x.bookTitle, minutes: x.minutes, progress: x.progress, kindleFalta: x.kindleFalta, fecha: x.fecha });
+            r = await apiPost({ action: 'guardar', id: x.id, bookTitle: x.bookTitle, minutes: x.minutes, progress: x.progress, kindleFalta: x.kindleFalta, fecha: x.fecha, partes: x.partes || null });
           } catch (e) {
             break;                                         // sin red o sin respuesta: se reintenta después
           }
@@ -1177,7 +1230,13 @@
       const r = lsGet('resumenCache', { dias: {} });
       const d = Object.assign({}, r.dias || {});
       leerCola().forEach(function(x) {
-        if (x.minutes > 0) d[x.fecha] = (d[x.fecha] || 0) + x.minutes;
+        if (Array.isArray(x.partes) && x.partes.length) {
+          x.partes.forEach(function(p) {
+            d[p.fecha] = (d[p.fecha] || 0) + (Number(p.minutos) || 0);
+          });
+        } else if (x.minutes > 0) {
+          d[x.fecha] = (d[x.fecha] || 0) + x.minutes;
+        }
       });
       return d;
     }
