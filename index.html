@@ -261,6 +261,8 @@
     .confirm-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; }
     .confirm-actions button { min-width: 108px; padding: 11px 14px; color: var(--text-primary); background: linear-gradient(var(--card-bg), var(--card-bg)) padding-box, var(--grad-boton) border-box; border: 1.5px solid transparent; }
     .confirm-actions .confirm-accept { background: linear-gradient(var(--card-bg), var(--card-bg)) padding-box, var(--grad-rojo) border-box; }
+    .confirm-actions .checkpoint-save { background: linear-gradient(var(--card-bg), var(--card-bg)) padding-box, var(--grad-boton) border-box; color: var(--accent-green); }
+    .midnight-progress-input { width: 100%; margin-top: 8px; text-align: center; font-size: 1.15rem; }
   </style>
 </head>
 <body>
@@ -393,6 +395,18 @@
     </form>
   </dialog>
 
+  <dialog id="midnightDialog" class="confirm-dialog" aria-labelledby="midnightTitle">
+    <form class="confirm-card" onsubmit="event.preventDefault(); guardarAvanceMedianoche();">
+      <h2 id="midnightTitle">Cierre de día</h2>
+      <p id="midnightMessage" class="confirm-message"></p>
+      <label class="selector-label" for="midnightProgressInput">Avance del libro (%)</label>
+      <input id="midnightProgressInput" class="text-input midnight-progress-input" type="number" min="0" max="100" step="1" inputmode="numeric" required>
+      <div class="confirm-actions">
+        <button type="submit" class="checkpoint-save">Guardar avance y continuar</button>
+      </div>
+    </form>
+  </dialog>
+
   <div id="fin" class="fin" hidden role="dialog" aria-modal="true" aria-labelledby="finTitulo">
     <div class="fin-card">
       <div class="fin-emoji" aria-hidden="true">🎉</div>
@@ -438,6 +452,9 @@
     let segundosPorDia = {};   // segundos reales del cronómetro agrupados por fecha local
     let alarmaAudio = null;
     let ultimaAlertaMedianoche = '';
+    let medianochePendiente = null;
+    let avancesRegistradosPorFecha = {};
+    let interfazLista = false;
     let libroSesion = '';
     let startMs = 0;
     let isRunning = false;
@@ -458,10 +475,20 @@
       $('newBookTitleInput').addEventListener('input', actualizarGuardar);
       $('manualMinutesInput').addEventListener('input', function() { minsManual = true; actualizarGuardar(); });
       $('newProgressInput').addEventListener('input', function() { previewAvance(); actualizarGuardar(); });
+      $('midnightDialog').addEventListener('cancel', function(e) { e.preventDefault(); });
+      $('midnightProgressInput').addEventListener('input', function() {
+        if (medianochePendiente) {
+          medianochePendiente.progreso = $('midnightProgressInput').value;
+          guardarEstado();
+        }
+      });
       actualizarGuardar();
       actualizarPendientes();
 
-      loadBooks(restaurarEstado());
+      loadBooks(restaurarEstado()).then(function() {
+        interfazLista = true;
+        if (medianochePendiente) abrirDialogoAvanceMedianoche();
+      });
       sincronizar();
 
       const metas = leerMetas();
@@ -548,16 +575,126 @@
 
     function revisarAvisoMedianoche() {
       if (!isRunning || !startMs) return;
-      const hoy = fechaLocal(Date.now());
-      if (fechaLocal(startMs) >= hoy || ultimaAlertaMedianoche === hoy) return;
+      const ahora = Date.now();
+      const hoy = fechaLocal(ahora);
+      if (fechaLocal(startMs) >= hoy) return;
 
-      ultimaAlertaMedianoche = hoy;
+      const inicioHoy = new Date(ahora);
+      inicioHoy.setHours(0, 0, 0, 0);
+      const corteMs = inicioHoy.getTime();
+      const fechaCierre = fechaLocal(corteMs - 1);
+
+      if (Object.prototype.hasOwnProperty.call(avancesRegistradosPorFecha, fechaCierre)) return;
+      if (medianochePendiente) {
+        if (interfazLista) abrirDialogoAvanceMedianoche();
+        return;
+      }
+
+      if (ultimaAlertaMedianoche !== hoy) {
+        ultimaAlertaMedianoche = hoy;
+        try {
+          if (navigator.vibrate) navigator.vibrate([180, 80, 180, 80, 300]);
+        } catch (e) {}
+        sonarAlarmaMedianoche();
+      }
+
+      medianochePendiente = {
+        id: 'avance-' + fechaCierre + '-' + ((window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2)),
+        fecha: fechaCierre,
+        corteMs: corteMs,
+        libro: libroSesion,
+        progreso: ''
+      };
       guardarEstado();
-      toast('⏰ Medianoche: anota tu avance de hoy. El cronómetro sigue corriendo.');
-      try {
-        if (navigator.vibrate) navigator.vibrate([180, 80, 180, 80, 300]);
-      } catch (e) {}
-      sonarAlarmaMedianoche();
+      if (interfazLista) abrirDialogoAvanceMedianoche();
+    }
+
+    function abrirDialogoAvanceMedianoche() {
+      if (!medianochePendiente || !interfazLista) return;
+      const dialog = $('midnightDialog');
+      if (dialog.open) return;
+
+      const libro = medianochePendiente.libro || libroSesion || getSelectedBookTitle();
+      const fechaBonita = new Date(medianochePendiente.fecha + 'T00:00:00').toLocaleDateString('es-GT', {
+        weekday: 'long', day: 'numeric', month: 'long'
+      });
+      $('midnightMessage').textContent =
+        '¿A qué porcentaje llegaste con «' + libro + '» al cerrar el ' + fechaBonita +
+        '? Se guardará ese avance en ese día. El cronómetro sigue contando para hoy.';
+      const input = $('midnightProgressInput');
+      const sugerido = medianochePendiente.progreso !== undefined && medianochePendiente.progreso !== ''
+        ? medianochePendiente.progreso
+        : $('newProgressInput').value;
+      input.value = sugerido === '' ? String(avanceActual || 0) : sugerido;
+      medianochePendiente.progreso = input.value;
+      guardarEstado();
+      dialog.showModal();
+      input.focus();
+      input.select();
+    }
+
+    function guardarAvanceMedianoche() {
+      if (!medianochePendiente) return;
+      const raw = String($('midnightProgressInput').value).replace('%', '').trim();
+      const progreso = Number(raw);
+      if (raw === '' || !isFinite(progreso) || progreso < 0 || progreso > 100) {
+        alert('El avance debe ser un número entre 0 y 100.');
+        return;
+      }
+
+      const titulo = medianochePendiente.libro || libroSesion || getSelectedBookTitle();
+      if (!titulo) {
+        alert('No se encontró el libro de esta sesión.');
+        return;
+      }
+
+      const libro = booksData.find(b => b.title.toLowerCase() === titulo.toLowerCase());
+      const ultimo = libro ? Number(libro.progress) || 0 : Number(avanceActual) || 0;
+      if (progreso < ultimo) {
+        alert('El avance no puede ser menor que el último registrado (' + ultimo + '%).');
+        return;
+      }
+
+      const pendiente = medianochePendiente;
+      const cola = leerCola();
+      if (!cola.some(x => x.id === pendiente.id)) {
+        cola.push({
+          id: pendiente.id,
+          bookTitle: titulo,
+          minutes: 0,
+          progress: progreso,
+          kindleFalta: '',
+          fecha: pendiente.fecha,
+          partes: [{ fecha: pendiente.fecha, minutos: 0, avance: progreso }],
+          checkpoint: true
+        });
+        if (!escribirCola(cola)) {
+          alert('No se pudo guardar el avance en este dispositivo. Intenta de nuevo.');
+          return;
+        }
+      }
+
+      avancesRegistradosPorFecha[pendiente.fecha] = progreso;
+      medianochePendiente = null;
+      avanceActual = progreso;
+      if (libro) libro.progress = progreso;
+      else booksData.push({ title: titulo, author: 'En lectura', progress: progreso });
+      booksData = booksData.filter(b => b.progress < 100 ||
+        ((isRunning || seconds > 0) && b.title.toLowerCase() === titulo.toLowerCase()));
+      lsSet('librosCache', booksData);
+      $('currentProgressText').innerText = progreso + '%';
+      $('progressBarFill').style.width = progreso + '%';
+      $('newProgressInput').value = progreso;
+      previewAvance();
+      actualizarGuardar();
+      guardarEstado();
+      $('midnightDialog').close();
+      actualizarPendientes();
+      renderRitmo();
+      toast(navigator.onLine
+        ? 'Avance guardado para el día anterior. La sesión continúa.'
+        : 'Avance guardado en este dispositivo; se enviará al reconectar.');
+      sincronizar();
     }
 
     function elapsedSeconds() {
@@ -730,6 +867,8 @@
         seconds: seconds,
         segundosPorDia: segundosPorDia,
         ultimaAlertaMedianoche: ultimaAlertaMedianoche,
+        medianochePendiente: medianochePendiente,
+        avancesRegistradosPorFecha: avancesRegistradosPorFecha,
         libro: $('bookSelect').value,
         libroSesion: libroSesion,
         nuevo: $('newBookTitleInput').value
@@ -743,6 +882,11 @@
       if (est && (est.isRunning || Number(est.seconds) > 0)) {
         seconds = Number(est.seconds) || 0;
         ultimaAlertaMedianoche = String(est.ultimaAlertaMedianoche || '');
+        medianochePendiente = est.medianochePendiente && typeof est.medianochePendiente === 'object'
+          ? est.medianochePendiente : null;
+        avancesRegistradosPorFecha = est.avancesRegistradosPorFecha &&
+          typeof est.avancesRegistradosPorFecha === 'object' && !Array.isArray(est.avancesRegistradosPorFecha)
+          ? est.avancesRegistradosPorFecha : {};
         segundosPorDia = est.segundosPorDia && typeof est.segundosPorDia === 'object' && !Array.isArray(est.segundosPorDia)
           ? est.segundosPorDia : {};
         // Los relojes iniciados con una versión anterior no guardaban el reparto por día.
@@ -836,7 +980,17 @@
         if (b) b.progress = x.progress;
         else booksData.push({ title: x.bookTitle, author: 'En lectura', progress: x.progress });
       });
-      booksData = booksData.filter(b => b.progress < 100);
+      if ((isRunning || seconds > 0) && libroSesion &&
+          !booksData.some(b => b.title.toLowerCase() === libroSesion.toLowerCase())) {
+        const progresoSesion = Number(String($('newProgressInput').value).replace('%', '').trim());
+        booksData.push({
+          title: libroSesion,
+          author: 'En lectura',
+          progress: isFinite(progresoSesion) ? progresoSesion : (avanceActual || 0)
+        });
+      }
+      booksData = booksData.filter(b => b.progress < 100 ||
+        ((isRunning || seconds > 0) && b.title.toLowerCase() === libroSesion.toLowerCase()));
     }
 
     // ?libro=Titulo: se aplica una sola vez y solo si no hay un reloj en curso
@@ -983,6 +1137,9 @@
         if (seconds === 0) {
           libroSesion = getSelectedBookTitle();
           segundosPorDia = {};
+          avancesRegistradosPorFecha = {};
+          medianochePendiente = null;
+          ultimaAlertaMedianoche = '';
           if (!libroSesion) {
             toast('Selecciona o escribe un libro antes de iniciar.');
             return;
@@ -994,6 +1151,7 @@
         btn.className = 'btn-stop';
         timerInterval = setInterval(pintarReloj, 1000);
       } else {
+        revisarAvisoMedianoche();
         const ahora = Date.now();
         sumarIntervaloPorDia(startMs, ahora, segundosPorDia);
         seconds += Math.floor((ahora - startMs) / 1000);
@@ -1011,6 +1169,9 @@
       isRunning = false;
       seconds = 0;
       segundosPorDia = {};
+      avancesRegistradosPorFecha = {};
+      medianochePendiente = null;
+      ultimaAlertaMedianoche = '';
       startMs = 0;
       libroSesion = '';
       minsManual = false;
@@ -1220,6 +1381,7 @@
       if (!cola.length) return;
       sincronizando = true;
       let enviadas = 0;
+      let avancesEnviados = 0;
       try {
         while (cola.length) {
           const x = cola[0];
@@ -1230,7 +1392,8 @@
             break;                                         // sin red o sin respuesta: se reintenta después
           }
           if (r && r.ok) {
-            enviadas++;
+            if (x.checkpoint) avancesEnviados++;
+            else enviadas++;
           } else {                                         // el servidor la rechazó: se aparta para no bloquear
             const f = lsGet('sesionesFallidas', []);
             f.push(Object.assign({}, x, { error: (r && r.error) || 'desconocido' }));
@@ -1245,8 +1408,13 @@
         sincronizando = false;
         actualizarPendientes();
       }
-      if (enviadas) toast(enviadas === 1 ? 'Sesión sincronizada.' : enviadas + ' sesiones sincronizadas.');
-      if (enviadas && !leerCola().length) {
+      if (enviadas || avancesEnviados) {
+        const mensajes = [];
+        if (enviadas) mensajes.push(enviadas + (enviadas === 1 ? ' sesión' : ' sesiones'));
+        if (avancesEnviados) mensajes.push(avancesEnviados + (avancesEnviados === 1 ? ' avance' : ' avances'));
+        toast(mensajes.join(' y ') + ' sincronizado' + (enviadas + avancesEnviados === 1 ? '.' : 's.'));
+      }
+      if ((enviadas || avancesEnviados) && !leerCola().length) {
         loadBooks($('bookSelect').value || null);
         loadMetrics();
         loadResumen();
