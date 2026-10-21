@@ -263,6 +263,7 @@
     .confirm-actions .confirm-accept { background: linear-gradient(var(--card-bg), var(--card-bg)) padding-box, var(--grad-rojo) border-box; }
     .confirm-actions .checkpoint-save { background: linear-gradient(var(--card-bg), var(--card-bg)) padding-box, var(--grad-boton) border-box; color: var(--accent-green); }
     .midnight-progress-input { width: 100%; margin-top: 8px; text-align: center; font-size: 1.15rem; }
+    .midnight-kindle-group { margin-top: 16px; }
   </style>
 </head>
 <body>
@@ -401,8 +402,17 @@
       <p id="midnightMessage" class="confirm-message"></p>
       <label class="selector-label" for="midnightProgressInput">Avance del libro (%)</label>
       <input id="midnightProgressInput" class="text-input midnight-progress-input" type="number" min="0" max="100" step="1" inputmode="numeric" required>
+      <div class="input-group midnight-kindle-group">
+        <span class="selector-label" id="midnightKindleLabel">Tiempo restante en Kindle (opcional)</span>
+        <div class="kindle-fields" role="group" aria-labelledby="midnightKindleLabel">
+          <input type="number" id="midnightKindleHorasInput" min="0" inputmode="numeric" aria-label="Horas restantes según Kindle">
+          <span class="selector-label">h</span>
+          <input type="number" id="midnightKindleMinsInput" min="0" max="59" inputmode="numeric" aria-label="Minutos restantes según Kindle">
+          <span class="selector-label">min</span>
+        </div>
+      </div>
       <div class="confirm-actions">
-        <button type="submit" class="checkpoint-save">Guardar avance y continuar</button>
+        <button type="submit" class="checkpoint-save">Guardar corte y continuar</button>
       </div>
     </form>
   </dialog>
@@ -481,6 +491,15 @@
           medianochePendiente.progreso = $('midnightProgressInput').value;
           guardarEstado();
         }
+      });
+      ['midnightKindleHorasInput', 'midnightKindleMinsInput'].forEach(function(id) {
+        $(id).addEventListener('input', function() {
+          if (medianochePendiente) {
+            medianochePendiente.kindleHoras = $('midnightKindleHorasInput').value;
+            medianochePendiente.kindleMinutos = $('midnightKindleMinsInput').value;
+            guardarEstado();
+          }
+        });
       });
       actualizarGuardar();
       actualizarPendientes();
@@ -620,13 +639,15 @@
       });
       $('midnightMessage').textContent =
         '¿A qué porcentaje llegaste con «' + libro + '» al cerrar el ' + fechaBonita +
-        '? Se guardará ese avance en ese día. El cronómetro sigue contando para hoy.';
+        ' y cuánto tiempo restante indicaba Kindle? Los dos datos se guardarán en ese día. El cronómetro sigue contando.';
       const input = $('midnightProgressInput');
       const sugerido = medianochePendiente.progreso !== undefined && medianochePendiente.progreso !== ''
         ? medianochePendiente.progreso
         : $('newProgressInput').value;
       input.value = sugerido === '' ? String(avanceActual || 0) : sugerido;
       medianochePendiente.progreso = input.value;
+      $('midnightKindleHorasInput').value = medianochePendiente.kindleHoras || '';
+      $('midnightKindleMinsInput').value = medianochePendiente.kindleMinutos || '';
       guardarEstado();
       dialog.showModal();
       input.focus();
@@ -655,23 +676,37 @@
         return;
       }
 
+      const kindleHorasRaw = String($('midnightKindleHorasInput').value).trim();
+      const kindleMinutosRaw = String($('midnightKindleMinsInput').value).trim();
+      let kindleFalta = '';
+      if (kindleHorasRaw !== '' || kindleMinutosRaw !== '') {
+        const horas = Number(kindleHorasRaw || 0);
+        const minutos = Number(kindleMinutosRaw || 0);
+        if (!isFinite(horas) || !isFinite(minutos) || horas < 0 || minutos < 0 || minutos > 59) {
+          alert('Revisa el tiempo de Kindle: horas desde 0 y minutos entre 0 y 59.');
+          return;
+        }
+        kindleFalta = horas + ' h ' + minutos + ' min';
+      }
+
       const pendiente = medianochePendiente;
       const cola = leerCola();
-      if (!cola.some(x => x.id === pendiente.id)) {
-        cola.push({
+      const corte = {
           id: pendiente.id,
           bookTitle: titulo,
           minutes: 0,
           progress: progreso,
-          kindleFalta: '',
+          kindleFalta: kindleFalta,
           fecha: pendiente.fecha,
           partes: [{ fecha: pendiente.fecha, minutos: 0, avance: progreso }],
           checkpoint: true
-        });
-        if (!escribirCola(cola)) {
-          alert('No se pudo guardar el avance en este dispositivo. Intenta de nuevo.');
-          return;
-        }
+      };
+      const corteExistente = cola.findIndex(x => x.id === pendiente.id);
+      if (corteExistente >= 0) cola[corteExistente] = corte;
+      else cola.push(corte);
+      if (!escribirCola(cola)) {
+        alert('No se pudo guardar el avance y el tiempo de Kindle en este dispositivo. Intenta de nuevo.');
+        return;
       }
 
       avancesRegistradosPorFecha[pendiente.fecha] = progreso;
@@ -692,8 +727,8 @@
       actualizarPendientes();
       renderRitmo();
       toast(navigator.onLine
-        ? 'Avance guardado para ' + pendiente.fecha + '. La sesión continúa.'
-        : 'Avance guardado en este dispositivo; se enviará al reconectar.');
+        ? 'Corte guardado para ' + pendiente.fecha + '. La sesión continúa.'
+        : 'Corte guardado en este dispositivo; se enviará al reconectar.');
       sincronizar();
     }
 
@@ -1604,3 +1639,4 @@
   </script>
 </body>
 </html>
+
