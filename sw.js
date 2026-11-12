@@ -1,6 +1,6 @@
 // Guarda la app en el teléfono para abrirla sin conexión.
 // Los datos (Apps Script) nunca pasan por la caché: la app los guarda por su cuenta.
-const CACHE = 'cronometro-v10';
+const CACHE = 'cronometro-v11';
 const SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', function(e) {

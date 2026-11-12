@@ -421,7 +421,7 @@
         <div class="leyenda" id="ritmoLeyenda"></div>
         <div class="ritmo-fila"><span class="selector-label">Hoy</span><span id="ritmoHoy">0 / 30 min</span></div>
         <div class="progress-bar-bg"><div class="progress-bar-fill" id="ritmoHoyBar"></div><div class="progress-bar-gain" id="ritmoHoyExtra"></div></div>
-        <div class="ritmo-fila"><span class="selector-label">Esta semana</span><span id="ritmoSemana">0 min</span></div>
+        <div class="ritmo-fila"><span class="selector-label">Últimos 7 días</span><span id="ritmoSemana">0 min</span></div>
         <div class="ritmo-fila"><span class="selector-label">Terminados <span id="ritmoAnio"></span></span><span id="ritmoLibros">0 / 24</span></div>
         <div class="fila-doble">
           <div class="minutos-group" id="metaDiariaCard">
@@ -542,6 +542,7 @@
     let avanceActual = 0;
     let sincronizando = false;
     let minHoyGuardados = 0;   // minutos de hoy ya guardados (hoja + pendientes)
+    let ultimoHoyVivo = -1;    // último "hoy" con la sesión en curso ya pintado en el ritmo
 
     const $ = id => document.getElementById(id);
 
@@ -965,8 +966,7 @@
     // borrando la base a medida que avanza.
     function pintarMarcoMetaDiaria() {
       const metas = leerMetas();
-      const d = minutosPorDia();
-      const hoy = d[fechaHace(0)] || 0;
+      const hoy = minutosHoyVivo();
       const rv = metas.diaria > 0 ? hoy / metas.diaria : 0;
       const vf = vueltaYFraccion(rv);
       const base = vf.vuelta >= 1 ? COLORES_VUELTA[(vf.vuelta - 1) % 4] : null;
@@ -990,8 +990,11 @@
     // (minutos leídos + minutos restantes estimados). Los restantes se calculan
     // como en actualizarPaginasLibro (páginas que faltan / ritmo). Sin total de
     // páginas o sin ritmo, el avance del libro (progreso/100). Verde, 0-100%, sin vueltas.
-    function pintarMarcoTotal() {
+    // Con argumento usa ese avance en vez del guardado (previsualizar con el tecleado):
+    // el ritmo se calcula con el mismo avance, así el arco va al avance tecleado.
+    function pintarMarcoTotal(avance) {
       const titulo = getSelectedBookTitle();
+      const av = (typeof avance === 'number') ? avance : avanceActual;
       let frac = 0;
       if (titulo) {
         const total = paginasTotalesDe(titulo);
@@ -1000,14 +1003,14 @@
           .filter(x => x.bookTitle.toLowerCase() === titulo.toLowerCase())
           .reduce((a, x) => a + x.minutes, 0);
         const leidos = (m && typeof m.totalMinutes === 'number' ? m.totalMinutes : 0) + pend;
-        const ritmo = paginasPorHora(titulo, total);
+        const ritmo = paginasPorHora(titulo, total, av);
         if (total > 0 && ritmo > 0) {
-          const leidas = Math.round(avanceActual / 100 * total);
+          const leidas = Math.round(av / 100 * total);
           const faltan = Math.max(0, total - leidas);
           const restantes = faltan / ritmo * 60;
           frac = (leidos + restantes) > 0 ? leidos / (leidos + restantes) : 0;
         } else {
-          frac = Math.min(1, Math.max(0, avanceActual / 100));
+          frac = Math.min(1, Math.max(0, av / 100));
         }
       }
       trazoTotalPrevio = pintarMarcoSimetrico('totalCard', 'totalSvg', 'tArc', 'tArc2', frac, trazoTotalPrevio);
@@ -1178,6 +1181,11 @@
       aplicarEstadoVisual(total);
       revisarAvisoMedianoche();
       actualizarGuardar();
+      // "Hoy" incluye la sesión en curso: mientras el cronómetro corre (o está en pausa),
+      // se repinta el ritmo cuando el minuto de hoy cambia, para que "Hoy", sus barras y
+      // la meta diaria vayan al mismo ritmo que el gusanito y el texto del crono.
+      const hoyVivo = minutosHoyVivo();
+      if (hoyVivo !== ultimoHoyVivo) { ultimoHoyVivo = hoyVivo; renderRitmo(); }
     }
 
     function mostrarEstadoReloj() {
@@ -1418,6 +1426,11 @@
         $('kpiTotalMin').innerText = '0 min';
         $('kpiAvgDaily').innerText = '0 min';
         previewAvance();
+        // Sin libro todavía no hay promedio: los arcos de TOTAL y PROM/DÍA van a 0,
+        // no se quedan con los valores del libro anterior.
+        promDiaMin = 0;
+        pintarMarcoTotal();
+        pintarMarcoPromDia();
         actualizarGuardar();
       } else {
         $('newBookInputContainer').style.display = 'none';
@@ -1452,6 +1465,9 @@
       pintarMarcoAvance();
       pintarMarcoLibro();
       actualizarPaginasLibro();
+      // El arco TOTAL también va al avance tecleado (con el ritmo calculado con ese
+      // mismo avance, así queda en el mismo porcentaje que el arco del libro).
+      pintarMarcoTotal(Math.min(100, Math.max(0, Number($('newProgressInput').value) || 0)));
     }
 
     // Páginas totales del libro: Carlos las teclea una vez por libro y se guardan en este dispositivo
@@ -1468,13 +1484,21 @@
       if (n > 0) mapa[titulo] = Math.floor(n); else delete mapa[titulo];
       lsSet('paginasTotales', mapa);
     }
-    // Ritmo en págs/hora: páginas leídas hasta el avance guardado / minutos totales del libro (metricas).
-    function paginasPorHora(titulo, total) {
-      if (!titulo || !total || avanceActual <= 0) return 0;
+    // Ritmo en págs/hora: páginas leídas hasta el avance / minutos totales del libro.
+    // Los minutos son los de metricas + las sesiones pendientes de enviar (igual que
+    // mostrarMetricas y pintarMarcoTotal). Sin tercer argumento usa el avance guardado;
+    // con él, el avance indicado (para previsualizar el arco TOTAL con el avance tecleado).
+    function paginasPorHora(titulo, total, avance) {
+      if (!titulo || !total) return 0;
+      const av = (typeof avance === 'number') ? avance : avanceActual;
+      if (av <= 0) return 0;
       const m = (lsGet('metricasCache', {}) || {})[titulo];
-      const mins = m && typeof m.totalMinutes === 'number' ? m.totalMinutes : 0;
+      const pend = leerCola()
+        .filter(x => x.bookTitle.toLowerCase() === titulo.toLowerCase())
+        .reduce((a, x) => a + x.minutes, 0);
+      const mins = (m && typeof m.totalMinutes === 'number' ? m.totalMinutes : 0) + pend;
       if (mins <= 0) return 0;
-      const leidas = Math.round(avanceActual / 100 * total);
+      const leidas = Math.round(av / 100 * total);
       return leidas > 0 ? leidas / mins * 60 : 0;
     }
     // Textos de páginas de la ficha del libro en una sola línea:
@@ -1680,7 +1704,12 @@
         progress: progress,
         kindleFalta: kindleFalta,
         fecha: fechaLocal(Date.now()),
-        partes: (!minsManual && elapsedSeconds() > 0) ? minutosPorFechaCrono() : null
+        // Con minutos tecleados a mano se reparten entre las fechas del cronómetro en
+        // proporción a los segundos de cada día (si el cronómetro no corrió, no hay
+        // reparto posible y la sesión queda en hoy). Sin minutos manuales, el reparto
+        // es el del cronómetro.
+        partes: manualMins > 0 ? repartirMinutosManuales(minutes)
+          : (elapsedSeconds() > 0 ? minutosPorFechaCrono() : null)
       };
       if (Array.isArray(sesion.partes) && sesion.partes.length) {
         sesion.minutes = sesion.partes.reduce((suma, parte) => suma + parte.minutos, 0);
@@ -1770,6 +1799,27 @@
       const porResto = partes.slice().sort((a, b) => b.resto - a.resto || a.fecha.localeCompare(b.fecha));
       for (let i = 0; i < restantes && i < porResto.length; i++) porResto[i].minutos++;
       return partes.map(({ fecha, minutos }) => ({ fecha: fecha, minutos: minutos }));
+    }
+
+    // Reparte unos minutos tecleados a mano entre las fechas del cronómetro, en
+    // proporción a los segundos reales de cada día (como minutosPorFechaCrono, pero
+    // con el total tecleado en vez del total del cronómetro). Sin segundos del
+    // cronómetro no hay reparto posible: devuelve null y la sesión queda en hoy.
+    function repartirMinutosManuales(minutos) {
+      const segundos = segundosCronoPorFecha();
+      const fechas = Object.keys(segundos).filter(f => segundos[f] > 0).sort();
+      if (!fechas.length || minutos <= 0) return null;
+      const totalSegundos = fechas.reduce((suma, fecha) => suma + segundos[fecha], 0);
+      if (totalSegundos <= 0) return null;
+      const partes = fechas.map(function(fecha) {
+        const exactos = segundos[fecha] / totalSegundos * minutos;
+        const base = Math.floor(exactos);
+        return { fecha: fecha, minutos: base, resto: exactos - base };
+      });
+      let restantes = minutos - partes.reduce((suma, p) => suma + p.minutos, 0);
+      const porResto = partes.slice().sort((a, b) => b.resto - a.resto || a.fecha.localeCompare(b.fecha));
+      for (let i = 0; i < restantes && i < porResto.length; i++) porResto[i].minutos++;
+      return partes.map(function(p) { return { fecha: p.fecha, minutos: p.minutos }; });
     }
 
     // El puente rechaza sesiones con más de 3 fechas: se parten en trozos de 3 días como mucho.
@@ -2006,6 +2056,18 @@
       return d;
     }
 
+    // Minutos de la sesión en curso (cronómetro corriendo o en pausa) para hoy, en
+    // minutos fraccionarios: es lo que el gusanito y el texto del crono ya suman a lo guardado.
+    function minutosHoyEnCurso() {
+      return (segundosCronoPorFecha()[fechaLocal(Date.now())] || 0) / 60;
+    }
+
+    // Minutos de hoy en vivo: lo ya guardado (hoja + pendientes) + la sesión en curso,
+    // en minutos enteros, igual que el "min hoy" del texto del crono.
+    function minutosHoyVivo() {
+      return Math.floor((minutosPorDia()[fechaHace(0)] || 0) + minutosHoyEnCurso());
+    }
+
     // Racha = días seguidos cumpliendo la meta diaria (si hoy aún no la cumples, cuenta desde ayer)
     function calcularRacha(d, meta) {
       let n = 0;
@@ -2056,8 +2118,12 @@
     function renderRitmo() {
       const d = minutosPorDia();
       const metas = leerMetas();
-      const hoy = d[fechaHace(0)] || 0;
-      minHoyGuardados = hoy;
+      // minHoyGuardados es solo lo guardado (el gusanito le suma la sesión en curso);
+      // "hoy" en cambio la incluye, para que "Hoy", su barra, la barra de hoy y la
+      // meta diaria digan lo mismo que el gusanito y el texto del crono.
+      minHoyGuardados = d[fechaHace(0)] || 0;
+      const hoy = Math.floor(minHoyGuardados + minutosHoyEnCurso());
+      d[fechaHace(0)] = hoy;
       const racha = calcularRacha(d, metas.diaria);
       const record = Math.max(racha, calcularRecord(d, metas.diaria));
       $('ritmoResumen').textContent = (racha > 0 ? '🔥 ' + racha + (racha === 1 ? ' día' : ' días') : '') +
