@@ -989,13 +989,15 @@
       trazoTotalPrevio = pintarMarcoSimetrico('totalCard', 'totalSvg', 'tArc', 'tArc2', frac, trazoTotalPrevio);
     }
 
-    // Arco del marco de "Prom/Día": promedio diario / meta diaria, con vueltas
-    // (COLORES_VUELTA, igual que el gusanito). 48/30 = 1 vuelta + 60% en 2.ª.
+    // Arco del marco de "Prom/Día": promedio diario / meta diaria, en verde
+    // (COLORES_VUELTA[0], el de la primera vuelta). El verde se va comiendo el
+    // gris del marco a medida que el promedio sube; al alcanzar la meta el marco
+    // queda todo verde. Sin colores de vuelta: aquí lo que importa es el
+    // promedio contra la meta.
     function pintarMarcoPromDia() {
       const meta = leerMetas().diaria;
-      const rv = meta > 0 ? promDiaMin / meta : 0;
-      const vf = vueltaYFraccion(rv);
-      trazoPromPrevio = pintarMarcoSimetrico('promCard', 'promSvg', 'pArc', 'pArc2', vf.frac, trazoPromPrevio, COLORES_VUELTA[vf.vuelta % 4]);
+      const frac = meta > 0 ? Math.min(1, promDiaMin / meta) : 0;
+      trazoPromPrevio = pintarMarcoSimetrico('promCard', 'promSvg', 'pArc', 'pArc2', frac, trazoPromPrevio, COLORES_VUELTA[0]);
     }
 
     let trazoLibroPrevio = '';
