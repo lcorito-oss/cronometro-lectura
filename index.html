@@ -92,6 +92,10 @@
     .ring-svg path.rb { stroke-linecap: round; }
     .ring-svg.sin-anim path { transition: none; }
     #rTrack { stroke: var(--border-color); }
+    /* Marco verde de avance en la ficha "Nvo. avance": el marco completo es el 100% del libro */
+    .input-group.marco-avance { position: relative; }
+    .avance-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; overflow: visible; }
+    .avance-svg path { fill: none; stroke-linecap: round; transition: stroke-dasharray 0.4s ease, stroke-dashoffset 0.4s ease; }
     .timer-meta { margin-top: 10px; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.5px; color: var(--text-secondary); }
     .timer-meta.ok { color: var(--accent-green); }
     .timer-display { background-color: #111216; border-radius: 18px; padding: 20px 12px; text-align: center; }
@@ -189,6 +193,15 @@
     body { padding-top: calc(12px + env(safe-area-inset-top, 0px)); padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
     #pendientes { text-align: center; font-size: 0.78rem; color: var(--accent-amber); margin-top: 10px; }
     #pendientes:empty { display: none; }
+    #fallidas:empty { display: none; }
+    .fallida { background-color: var(--input-bg); border: 1px solid var(--accent-amber); border-radius: 12px; padding: 10px 12px; margin-top: 10px; text-align: left; }
+    .fallida-titulo { font-weight: 700; font-size: 0.9rem; }
+    .fallida-datos { font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px; }
+    .fallida-error { font-size: 0.78rem; color: var(--accent-amber); margin-top: 4px; }
+    .fallida-acciones { display: flex; gap: 8px; margin-top: 8px; }
+    .fallida-acciones button { flex: 1; padding: 8px 10px; font-size: 0.85rem; border-radius: 10px; cursor: pointer; }
+    .fallida-reenviar { color: var(--accent-green); background: linear-gradient(var(--card-bg), var(--card-bg)) padding-box, var(--grad-boton) border-box; border: 1.5px solid transparent; }
+    .fallida-descartar { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); }
 
     /* MI RITMO */
     details.ritmo { margin-top: 16px; border-top: 1px solid var(--border-color); padding-top: 8px; }
@@ -341,13 +354,16 @@
         <label class="selector-label" for="manualMinutesInput">Minutos leídos</label>
         <input type="number" id="manualMinutesInput" min="0" placeholder="0" inputmode="numeric">
       </div>
-      <div class="input-group">
+      <div class="input-group marco-avance" id="avanceCard">
         <label class="selector-label" for="newProgressInput">Nvo. avance(%)</label>
         <div class="avance-row">
           <button type="button" class="btn-quick" onclick="sumarAvance(1)" aria-label="Sumar 1 por ciento">+1</button>
           <input type="number" id="newProgressInput" min="0" max="100" inputmode="numeric">
           <button type="button" class="btn-quick" onclick="sumarAvance(5)" aria-label="Sumar 5 por ciento">+5</button>
         </div>
+        <svg class="avance-svg" id="avanceSvg" aria-hidden="true" preserveAspectRatio="none">
+          <path id="aArc" pathLength="100"/>
+        </svg>
       </div>
     </div>
 
@@ -363,6 +379,7 @@
 
     <button class="btn-save" id="saveBtn" onclick="handleSaveSession()" disabled>Guardar Sesión</button>
     <div id="pendientes" aria-live="polite"></div>
+    <div id="fallidas" aria-live="polite"></div>
 
     <details class="ritmo" id="ritmo">
       <summary><span>Mi ritmo</span><span id="ritmoResumen"></span></summary>
@@ -476,6 +493,7 @@
     let minsManual = false;
     let estadoRestaurado = false;
     let guardando = false;
+    let avisoDivision = '';   // mensaje de una sesión dividida, que muestra sincronizar() con el resultado
     let avanceActual = 0;
     let sincronizando = false;
     let minHoyGuardados = 0;   // minutos de hoy ya guardados (hoja + pendientes)
@@ -506,10 +524,13 @@
       });
       actualizarGuardar();
       actualizarPendientes();
+      actualizarFallidas();
+      pintarMarcoAvance();
 
       loadBooks(restaurarEstado()).then(function() {
         interfazLista = true;
         if (medianochePendiente) abrirDialogoAvanceMedianoche();
+        else revisarCierrePendiente();
       });
       sincronizar();
 
@@ -521,6 +542,7 @@
       });
       loadResumen();
       if (window.ResizeObserver) new ResizeObserver(function() { pintarAnillo(elapsedSeconds()); }).observe($('timerDisplay'));
+      if (window.ResizeObserver) new ResizeObserver(function() { pintarMarcoAvance(); }).observe($('avanceCard'));
       setInterval(function() { if (leerCola().length) sincronizar(); }, 60000);
 
       if ('serviceWorker' in navigator) {
@@ -735,6 +757,30 @@
       sincronizar();
     }
 
+    // Si un día se cerró sin avance (se pausó antes de medianoche y se reanudó después),
+    // abre el diálogo "Cierre de día" para la fecha cerrada más antigua. Devuelve true si lo abrió.
+    function revisarCierrePendiente() {
+      if (medianochePendiente) return false;
+      const hoy = fechaLocal(Date.now());
+      const fechas = Object.keys(segundosPorDia).filter(function(f) {
+        return f < hoy && (segundosPorDia[f] || 0) > 0 &&
+          !Object.prototype.hasOwnProperty.call(avancesRegistradosPorFecha, f);
+      }).sort();
+      if (!fechas.length) return false;
+      const fechaCierre = fechas[0];
+      const inicio = new Date(fechaCierre + 'T00:00:00');
+      medianochePendiente = {
+        id: 'avance-' + fechaCierre + '-' + ((window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2)),
+        fecha: fechaCierre,
+        corteMs: new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate() + 1).getTime(),
+        libro: libroSesion,
+        progreso: ''
+      };
+      guardarEstado();
+      if (interfazLista) abrirDialogoAvanceMedianoche();
+      return true;
+    }
+
     function elapsedSeconds() {
       return seconds + (isRunning ? Math.floor((Date.now() - startMs) / 1000) : 0);
     }
@@ -763,13 +809,39 @@
     let trazoPrevio = '';
     let posPrevia = 0;
 
-    // Rectángulo redondeado (línea central del anillo) que empieza arriba al centro y gira en sentido horario
-    function trazoAnillo(W, H, g) {
-      const x0 = g / 2, y0 = g / 2, x1 = W - g / 2, y1 = H - g / 2, r = 18 + g / 2, cx = W / 2;
+    // Rectángulo redondeado (línea central) que empieza arriba al centro y gira en sentido horario
+    function trazoMarco(W, H, g, radio) {
+      const x0 = g / 2, y0 = g / 2, x1 = W - g / 2, y1 = H - g / 2, r = radio, cx = W / 2;
       return 'M' + cx + ',' + y0 + ' H' + (x1 - r) + ' A' + r + ',' + r + ' 0 0 1 ' + x1 + ',' + (y0 + r) +
         ' V' + (y1 - r) + ' A' + r + ',' + r + ' 0 0 1 ' + (x1 - r) + ',' + y1 +
         ' H' + (x0 + r) + ' A' + r + ',' + r + ' 0 0 1 ' + x0 + ',' + (y1 - r) +
         ' V' + (y0 + r) + ' A' + r + ',' + r + ' 0 0 1 ' + (x0 + r) + ',' + y0 + ' H' + cx;
+    }
+
+    // El anillo del reloj usa el mismo trazo, con el radio del marco del crono
+    function trazoAnillo(W, H, g) {
+      return trazoMarco(W, H, g, 18 + g / 2);
+    }
+
+    let trazoAvancePrevio = '';
+    // Marco verde de la ficha "Nvo. avance": el marco completo es el 100% del libro.
+    // El arco muestra el nuevo avance (valor del input) y se actualiza en vivo con previewAvance().
+    function pintarMarcoAvance() {
+      const card = $('avanceCard');
+      if (!card) return;
+      const g = 3;
+      const W = card.offsetWidth;
+      const H = card.offsetHeight;
+      if (!W || !H) return;
+      const svg = $('avanceSvg');
+      svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+      const d = trazoMarco(W, H, g, 12 - g / 2);
+      if (d !== trazoAvancePrevio) {
+        $('aArc').setAttribute('d', d);
+        trazoAvancePrevio = d;
+      }
+      const nuevo = Math.min(100, Math.max(0, Number($('newProgressInput').value) || 0));
+      tramo('aArc', 0, nuevo / 100, 'var(--accent-green)', g);
     }
 
     // Dibuja el tramo [ini, fin] (fracciones 0..1 del perímetro)
@@ -1014,6 +1086,7 @@
     // Las sesiones pendientes de enviar ya cuentan en la lista local
     function aplicarPendientesALibros() {
       leerCola().forEach(function(x) {
+        if (x.progress === null || x.progress === undefined) return;   // trozo intermedio: el avance va en el último
         const b = booksData.find(k => k.title.toLowerCase() === x.bookTitle.toLowerCase());
         if (b) b.progress = x.progress;
         else booksData.push({ title: x.bookTitle, author: 'En lectura', progress: x.progress });
@@ -1145,6 +1218,7 @@
       const gain = $('progressBarGain');
       gain.style.left = avanceActual + '%';
       gain.style.width = Math.max(0, nuevo - avanceActual) + '%';
+      pintarMarcoAvance();
     }
 
     function sumarAvance(n) {
@@ -1188,6 +1262,7 @@
         btn.innerText = 'Pausar';
         btn.className = 'btn-stop';
         timerInterval = setInterval(pintarReloj, 1000);
+        revisarCierrePendiente();
       } else {
         revisarAvisoMedianoche();
         const ahora = Date.now();
@@ -1244,6 +1319,12 @@
       const btn = $('saveBtn');
       if (btn.disabled) return;
 
+      // Si quedó un día cerrado sin avance, primero se cierra con el diálogo de medianoche.
+      if (revisarCierrePendiente()) {
+        toast('Primero cierra el día anterior con su avance.');
+        return;
+      }
+
       const bookTitle = getSelectedBookTitle();
       if (!bookTitle) {
         alert('Ingresa o selecciona un título de libro válido.');
@@ -1298,16 +1379,27 @@
         sesion.minutes = sesion.partes.reduce((suma, parte) => suma + parte.minutos, 0);
       }
 
+      // El puente rechaza sesiones con más de 3 fechas: se parten en trozos de 3 días como mucho.
+      const sesiones = dividirSesionEnPartes(sesion);
+      const dividida = sesiones.length > 1;
+
       // Siempre se guarda primero en este dispositivo; después se envía a la hoja
       const cola = leerCola();
-      cola.push(sesion);
+      sesiones.forEach(function(s) { cola.push(s); });
       if (!escribirCola(cola)) {
         alert('No se pudo guardar en este dispositivo. Intenta de nuevo.');
         return;
       }
 
       vibrar();
-      toast(navigator.onLine ? '¡Sesión guardada!' : 'Sesión guardada. Se enviará al reconectar.');
+      if (dividida) {
+        // El aviso de la división lo muestra sincronizar() junto al resultado del envío,
+        // para que no lo tape el toast de "sesiones sincronizadas". Sin conexión se avisa aquí.
+        avisoDivision = 'Sesión de ' + sesion.partes.length + ' días dividida en ' + sesiones.length + ' partes y guardada.';
+        if (!navigator.onLine) toast(avisoDivision + ' Se enviarán al reconectar.');
+      } else {
+        toast(navigator.onLine ? '¡Sesión guardada!' : 'Sesión guardada. Se enviará al reconectar.');
+      }
       guardando = true;                                   // evita un doble toque
       setTimeout(function() { guardando = false; actualizarGuardar(); }, 800);
       resetTimer();
@@ -1373,9 +1465,103 @@
       return partes.map(({ fecha, minutos }) => ({ fecha: fecha, minutos: minutos }));
     }
 
+    // El puente rechaza sesiones con más de 3 fechas: se parten en trozos de 3 días como mucho.
+    // El avance y el tiempo de Kindle solo van en el último trozo; los intermedios llevan
+    // el avance vacío y el puente les pone el último avance conocido del libro.
+    function dividirSesionEnPartes(sesion) {
+      const partes = sesion.partes;
+      if (!Array.isArray(partes) || partes.length <= 3) return [sesion];
+      const trozos = [];
+      for (let i = 0; i < partes.length; i += 3) {
+        const grupo = partes.slice(i, i + 3);
+        const ultimo = i + 3 >= partes.length;
+        trozos.push({
+          id: trozos.length === 0 ? sesion.id : ((window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2)),
+          bookTitle: sesion.bookTitle,
+          minutes: grupo.reduce(function(s, p) { return s + p.minutos; }, 0),
+          progress: ultimo ? sesion.progress : null,
+          kindleFalta: ultimo ? sesion.kindleFalta : '',
+          fecha: grupo[grupo.length - 1].fecha,
+          partes: grupo
+        });
+      }
+      return trozos;
+    }
+
     function actualizarPendientes() {
       const n = leerCola().length;
       $('pendientes').textContent = n ? n + (n === 1 ? ' sesión pendiente de enviar' : ' sesiones pendientes de enviar') : '';
+    }
+
+    function escaparHtml(t) {
+      return String(t == null ? '' : t).replace(/[&<>"']/g, function(c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function leerFallidas() { return lsGet('sesionesFallidas', []); }
+    function escribirFallidas(f) { return lsSet('sesionesFallidas', f); }
+
+    // Sesiones que el servidor rechazó: se ven en la app con su motivo y se pueden reenviar o descartar.
+    function actualizarFallidas() {
+      const cont = $('fallidas');
+      const lista = leerFallidas();
+      if (!lista.length) { cont.innerHTML = ''; return; }
+      let html = '<div class="seccion">Sesiones sin enviar</div>';
+      lista.forEach(function(x, i) {
+        const fecha = String(x.fecha || '').split('-').reverse().join('/');
+        html += '<div class="fallida">' +
+          '<div class="fallida-titulo">' + escaparHtml(x.bookTitle || 'Sin título') + '</div>' +
+          '<div class="fallida-datos">' + (fecha ? fecha + ' · ' : '') + formatearMin(x.minutes || 0) +
+          (typeof x.progress === 'number' ? ' · avance ' + x.progress + '%' : '') + '</div>' +
+          '<div class="fallida-error">No se pudo enviar: ' + escaparHtml(x.error || 'desconocido') + '</div>' +
+          '<div class="fallida-acciones">' +
+          '<button type="button" class="fallida-reenviar" onclick="reenviarFallida(' + i + ')">Reenviar</button>' +
+          '<button type="button" class="fallida-descartar" onclick="descartarFallida(' + i + ')">Descartar</button>' +
+          '</div></div>';
+      });
+      cont.innerHTML = html;
+    }
+
+    // Vuelve a poner la sesión en la cola con el mismo id: si el servidor ya la tenía, la deduplica.
+    async function reenviarFallida(i) {
+      const lista = leerFallidas();
+      const x = lista[i];
+      if (!x) return;
+      const cola = leerCola();
+      if (cola.some(function(s) { return s.id === x.id; })) {
+        lista.splice(i, 1);
+        escribirFallidas(lista);
+        actualizarFallidas();
+        actualizarPendientes();
+        toast('Esa sesión ya está en la cola para enviarse.');
+        return;
+      }
+      const copia = Object.assign({}, x);
+      delete copia.error;
+      cola.push(copia);
+      if (!escribirCola(cola)) {
+        alert('No se pudo poner la sesión en la cola. Intenta de nuevo.');
+        return;
+      }
+      lista.splice(i, 1);
+      escribirFallidas(lista);
+      actualizarFallidas();
+      actualizarPendientes();
+      toast('Sesión en cola para reenviar.');
+      sincronizar();
+    }
+
+    async function descartarFallida(i) {
+      const lista = leerFallidas();
+      const x = lista[i];
+      if (!x) return;
+      const aceptar = await mostrarConfirmacion('¿Descartar esta sesión? Se perderá y no se enviará a la hoja.');
+      if (!aceptar) return;
+      lista.splice(i, 1);
+      escribirFallidas(lista);
+      actualizarFallidas();
+      toast('Sesión descartada.');
     }
 
     function leerClave() { try { return localStorage.getItem(CLAVE_API) || ''; } catch (e) { return ''; } }
@@ -1436,7 +1622,7 @@
             const f = lsGet('sesionesFallidas', []);
             f.push(Object.assign({}, x, { error: (r && r.error) || 'desconocido' }));
             lsSet('sesionesFallidas', f);
-            toast('Una sesión fue rechazada por el servidor.');
+            toast('Una sesión fue rechazada por el servidor. Revisa «Sesiones sin enviar».');
           }
           cola.shift();
           escribirCola(cola);
@@ -1445,15 +1631,22 @@
       } finally {
         sincronizando = false;
         actualizarPendientes();
+        actualizarFallidas();
       }
+      let msgFinal = '';
       if (enviadas && avancesEnviados) {
-        toast(enviadas + (enviadas === 1 ? ' sesión y ' : ' sesiones y ') +
-          avancesEnviados + (avancesEnviados === 1 ? ' avance sincronizados.' : ' avances sincronizados.'));
+        msgFinal = enviadas + (enviadas === 1 ? ' sesión y ' : ' sesiones y ') +
+          avancesEnviados + (avancesEnviados === 1 ? ' avance sincronizados.' : ' avances sincronizados.');
       } else if (avancesEnviados) {
-        toast(avancesEnviados + (avancesEnviados === 1 ? ' avance sincronizado.' : ' avances sincronizados.'));
+        msgFinal = avancesEnviados + (avancesEnviados === 1 ? ' avance sincronizado.' : ' avances sincronizados.');
       } else if (enviadas) {
-        toast(enviadas === 1 ? 'Sesión sincronizada.' : enviadas + ' sesiones sincronizadas.');
+        msgFinal = enviadas === 1 ? 'Sesión sincronizada.' : enviadas + ' sesiones sincronizadas.';
       }
+      if (avisoDivision) {
+        msgFinal = avisoDivision + (msgFinal ? ' ' + msgFinal : '');
+        avisoDivision = '';
+      }
+      if (msgFinal) toast(msgFinal);
       if ((enviadas || avancesEnviados) && !leerCola().length) {
         loadBooks($('bookSelect').value || null);
         loadMetrics();
