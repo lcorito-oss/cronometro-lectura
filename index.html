@@ -52,15 +52,18 @@
     .selector-label { font-size: 0.78rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 700; letter-spacing: 1px; }
 
     .book-selector-container {
+      position: relative;
       background-color: var(--input-bg);
       border: 1px solid var(--border-color);
-      border-radius: 14px;
+      border-radius: 12px;
       padding: 14px;
       margin-bottom: 14px;
       display: flex;
       flex-direction: column;
       gap: 8px;
     }
+    .book-selector-container > label { text-align: center; }
+    #bookSelect { text-align: center; text-align-last: center; color: var(--accent-green); }
     select, input { width: 100%; background-color: transparent; color: var(--text-primary); border: none; outline: none; font-size: 1rem; font-weight: 600; }
     select:focus-visible { outline: 2px solid var(--accent-green); outline-offset: 2px; border-radius: 6px; }
     select:disabled { opacity: 0.65; cursor: not-allowed; }
@@ -74,7 +77,7 @@
     .progress-bar-fill { left: 0; width: 0%; background-color: var(--accent-green); }
     .progress-bar-gain { left: 0; width: 0%; background-color: var(--accent-gain); opacity: 0.55; }
     .progress-pill { background-color: rgba(0, 255, 136, 0.12); color: var(--accent-green); padding: 2px 8px; border-radius: 8px; font-weight: 700; font-size: 0.8rem; }
-    .progress-pages { font-size: 0.75rem; color: var(--text-primary); font-weight: 600; margin-top: 6px; white-space: nowrap; cursor: pointer; }
+    .progress-pages { font-size: 0.75rem; color: var(--text-primary); font-weight: 600; margin-top: 6px; white-space: nowrap; cursor: pointer; text-align: center; }
     .progress-pages .falta-txt { color: var(--text-secondary); font-weight: 400; }
     .progress-pages b { color: var(--accent-green); }
     .total-pages-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary); }
@@ -115,7 +118,7 @@
     .controls { display: flex; gap: 10px; margin-bottom: 16px; }
 
     .kpi-container { display: flex; gap: 12px; margin-bottom: 4px; }
-    .kpi-card { flex: 1; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 10px; text-align: center; }
+    .kpi-card { flex: 1; position: relative; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 10px; text-align: center; }
     .kpi-title { display: block; font-size: 0.72rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 700; letter-spacing: 0.5px; margin-bottom: 4px; }
     .kpi-value { font-size: 1.1rem; font-weight: 700; color: var(--accent-green); }
 
@@ -293,7 +296,7 @@
   <div class="card">
     <div class="header-title">CRONÓMETRO DE LECTURA</div>
 
-    <div class="book-selector-container">
+    <div class="book-selector-container" id="libroCard">
       <label class="selector-label" for="bookSelect">Libro actual</label>
       <select id="bookSelect" onchange="handleBookSelectChange()">
         <option value="">Cargando libros...</option>
@@ -306,20 +309,16 @@
       </div>
 
       <div class="progress-container">
-        <div class="progress-info">
-          <span>Último avance</span>
-          <span class="progress-pill" id="currentProgressText">0%</span>
-        </div>
-        <div class="progress-bar-bg">
-          <div class="progress-bar-fill" id="progressBarFill"></div>
-          <div class="progress-bar-gain" id="progressBarGain"></div>
-        </div>
         <div class="progress-pages" id="progressPagesText" hidden title="Toca para corregir el total de páginas"></div>
         <div class="total-pages-row" id="totalPagesRow" hidden>
           <label for="totalPagesInput">Páginas totales</label>
           <input type="number" id="totalPagesInput" min="1" inputmode="numeric" placeholder="—" aria-label="Páginas totales del libro">
         </div>
       </div>
+      <svg class="avance-svg" id="libroSvg" aria-hidden="true" preserveAspectRatio="none">
+        <path id="lArc" pathLength="100"/>
+        <path id="lArc2" pathLength="100"/>
+      </svg>
     </div>
 
     <div class="ring" id="ring">
@@ -358,13 +357,21 @@
     </div>
 
     <div class="kpi-container">
-      <div class="kpi-card">
+      <div class="kpi-card" id="totalCard">
         <span class="kpi-title">Total</span>
         <div class="kpi-value" id="kpiTotalMin">0 min</div>
+        <svg class="avance-svg" id="totalSvg" aria-hidden="true" preserveAspectRatio="none">
+          <path id="tArc" pathLength="100"/>
+          <path id="tArc2" pathLength="100"/>
+        </svg>
       </div>
-      <div class="kpi-card">
+      <div class="kpi-card" id="promCard">
         <span class="kpi-title">Prom/Día</span>
         <div class="kpi-value" id="kpiAvgDaily">0 min</div>
+        <svg class="avance-svg" id="promSvg" aria-hidden="true" preserveAspectRatio="none">
+          <path id="pArc" pathLength="100"/>
+          <path id="pArc2" pathLength="100"/>
+        </svg>
       </div>
     </div>
 
@@ -417,13 +424,21 @@
         <div class="ritmo-fila"><span class="selector-label">Esta semana</span><span id="ritmoSemana">0 min</span></div>
         <div class="ritmo-fila"><span class="selector-label">Terminados <span id="ritmoAnio"></span></span><span id="ritmoLibros">0 / 24</span></div>
         <div class="fila-doble">
-          <div class="minutos-group">
+          <div class="minutos-group" id="metaDiariaCard">
             <label class="selector-label" for="metaDiariaInput">Meta diaria</label>
             <input type="number" id="metaDiariaInput" min="1" inputmode="numeric">
+            <svg class="avance-svg" id="metaDiariaSvg" aria-hidden="true" preserveAspectRatio="none">
+              <path id="mdArc" pathLength="100"/>
+              <path id="mdArc2" pathLength="100"/>
+            </svg>
           </div>
-          <div class="minutos-group">
+          <div class="minutos-group" id="metaAnualCard">
             <label class="selector-label" for="metaAnualInput">Meta anual</label>
             <input type="number" id="metaAnualInput" min="1" inputmode="numeric">
+            <svg class="avance-svg" id="metaAnualSvg" aria-hidden="true" preserveAspectRatio="none">
+              <path id="maArc" pathLength="100"/>
+              <path id="maArc2" pathLength="100"/>
+            </svg>
           </div>
         </div>
       </div>
@@ -582,6 +597,11 @@
       if (window.ResizeObserver) new ResizeObserver(function() { pintarAnillo(elapsedSeconds()); }).observe($('timerDisplay'));
       if (window.ResizeObserver) new ResizeObserver(function() { pintarMarcoAvance(); }).observe($('avanceCard'));
       if (window.ResizeObserver) new ResizeObserver(function() { pintarMarcoMinutos(); }).observe($('minutosCard'));
+      if (window.ResizeObserver) new ResizeObserver(function() { pintarMarcoMetaDiaria(); }).observe($('metaDiariaCard'));
+      if (window.ResizeObserver) new ResizeObserver(function() { pintarMarcoMetaAnual(); }).observe($('metaAnualCard'));
+      if (window.ResizeObserver) new ResizeObserver(function() { pintarMarcoTotal(); }).observe($('totalCard'));
+      if (window.ResizeObserver) new ResizeObserver(function() { pintarMarcoPromDia(); }).observe($('promCard'));
+      if (window.ResizeObserver) new ResizeObserver(function() { pintarMarcoLibro(); }).observe($('libroCard'));
       setInterval(function() { if (leerCola().length) sincronizar(); }, 60000);
 
       if ('serviceWorker' in navigator) {
@@ -781,8 +801,6 @@
       booksData = booksData.filter(b => b.progress < 100 ||
         ((isRunning || seconds > 0) && b.title.toLowerCase() === titulo.toLowerCase()));
       lsSet('librosCache', booksData);
-      $('currentProgressText').innerText = progreso + '%';
-      $('progressBarFill').style.width = progreso + '%';
       $('newProgressInput').value = progreso;
       previewAvance();
       actualizarGuardar();
@@ -867,8 +885,10 @@
     // Arco simétrico sobre el marco de una ficha: crece desde la parte superior central
     // en ambas direcciones (derecha e izquierda a la vez) y los dos extremos se encuentran
     // en el centro inferior cuando llega al 100%. Lo usan el marco de "Nvo. avance"
-    // (fracción del libro) y el de "Minutos leídos" (fracción de la meta diaria).
-    function pintarMarcoSimetrico(cardId, svgId, id1, id2, fraccion, previo) {
+    // (fracción del libro), el de "Minutos leídos" (fracción de la meta diaria) y los
+    // marcos de "Meta diaria" y "Meta anual" (resto de la vuelta en curso, con el color
+    // de esa vuelta). Sin color, verde como antes.
+    function pintarMarcoSimetrico(cardId, svgId, id1, id2, fraccion, previo, color) {
       const card = $(cardId);
       if (!card) return previo;
       const g = 3;
@@ -884,8 +904,9 @@
         previo = d;
       }
       const mitad = Math.min(1, Math.max(0, fraccion)) / 2;
-      tramo(id1, 0, mitad, 'var(--accent-green)', g);
-      tramo(id2, 1 - mitad, 1, 'var(--accent-green)', g);
+      const colorTrazo = color || 'var(--accent-green)';
+      tramo(id1, 0, mitad, colorTrazo, g);
+      tramo(id2, 1 - mitad, 1, colorTrazo, g);
       return previo;
     }
 
@@ -904,6 +925,85 @@
       const mins = Math.max(0, Number($('manualMinutesInput').value) || 0);
       const frac = meta > 0 ? Math.min(1, mins / meta) : 0;
       trazoMinutosPrevio = pintarMarcoSimetrico('minutosCard', 'minutosSvg', 'mArc', 'mArc2', frac, trazoMinutosPrevio);
+    }
+
+    let trazoMetaDiariaPrevio = '';
+    let trazoMetaAnualPrevio = '';
+    // Vuelta y fracción del arco de una meta: el arco muestra el resto de la vuelta
+    // en curso con el color de esa vuelta (COLORES_VUELTA, los de la leyenda "Vueltas",
+    // igual que el gusanito y la barra de "Hoy"). Al cumplirse justo la meta (24/24)
+    // se ve la vuelta completa con el color de la vuelta que se acaba de cerrar.
+    function vueltaYFraccion(rv) {
+      if (!(rv > 0)) return { vuelta: 0, frac: 0 };
+      let vuelta = Math.floor(rv);
+      let frac = rv - vuelta;
+      if (frac < 0.001) { frac = 1; vuelta = vuelta - 1; }
+      return { vuelta: vuelta, frac: frac };
+    }
+
+    // Arco del marco de "Meta diaria": minutos de hoy / meta diaria.
+    function pintarMarcoMetaDiaria() {
+      const metas = leerMetas();
+      const d = minutosPorDia();
+      const hoy = d[fechaHace(0)] || 0;
+      const rv = metas.diaria > 0 ? hoy / metas.diaria : 0;
+      const vf = vueltaYFraccion(rv);
+      trazoMetaDiariaPrevio = pintarMarcoSimetrico('metaDiariaCard', 'metaDiariaSvg', 'mdArc', 'mdArc2', vf.frac, trazoMetaDiariaPrevio, COLORES_VUELTA[vf.vuelta % 4]);
+    }
+
+    // Arco del marco de "Meta anual": libros terminados / meta anual.
+    function pintarMarcoMetaAnual() {
+      const metas = leerMetas();
+      const rv = metas.anual > 0 ? terminadosAnio() / metas.anual : 0;
+      const vf = vueltaYFraccion(rv);
+      trazoMetaAnualPrevio = pintarMarcoSimetrico('metaAnualCard', 'metaAnualSvg', 'maArc', 'maArc2', vf.frac, trazoMetaAnualPrevio, COLORES_VUELTA[vf.vuelta % 4]);
+    }
+
+    let trazoTotalPrevio = '';
+    let trazoPromPrevio = '';
+    let promDiaMin = 0; // último promedio diario (min) del libro, para repintar al cambiar la meta
+    // Arco del marco de "Total": avance del libro en tiempo = minutos leídos /
+    // (minutos leídos + minutos restantes estimados). Los restantes se calculan
+    // como en actualizarPaginasLibro (páginas que faltan / ritmo). Sin total de
+    // páginas o sin ritmo, el avance del libro (progreso/100). Verde, 0-100%, sin vueltas.
+    function pintarMarcoTotal() {
+      const titulo = getSelectedBookTitle();
+      let frac = 0;
+      if (titulo) {
+        const total = paginasTotalesDe(titulo);
+        const m = (lsGet('metricasCache', {}) || {})[titulo];
+        const pend = leerCola()
+          .filter(x => x.bookTitle.toLowerCase() === titulo.toLowerCase())
+          .reduce((a, x) => a + x.minutes, 0);
+        const leidos = (m && typeof m.totalMinutes === 'number' ? m.totalMinutes : 0) + pend;
+        const ritmo = paginasPorHora(titulo, total);
+        if (total > 0 && ritmo > 0) {
+          const leidas = Math.round(avanceActual / 100 * total);
+          const faltan = Math.max(0, total - leidas);
+          const restantes = faltan / ritmo * 60;
+          frac = (leidos + restantes) > 0 ? leidos / (leidos + restantes) : 0;
+        } else {
+          frac = Math.min(1, Math.max(0, avanceActual / 100));
+        }
+      }
+      trazoTotalPrevio = pintarMarcoSimetrico('totalCard', 'totalSvg', 'tArc', 'tArc2', frac, trazoTotalPrevio);
+    }
+
+    // Arco del marco de "Prom/Día": promedio diario / meta diaria, con vueltas
+    // (COLORES_VUELTA, igual que el gusanito). 48/30 = 1 vuelta + 60% en 2.ª.
+    function pintarMarcoPromDia() {
+      const meta = leerMetas().diaria;
+      const rv = meta > 0 ? promDiaMin / meta : 0;
+      const vf = vueltaYFraccion(rv);
+      trazoPromPrevio = pintarMarcoSimetrico('promCard', 'promSvg', 'pArc', 'pArc2', vf.frac, trazoPromPrevio, COLORES_VUELTA[vf.vuelta % 4]);
+    }
+
+    let trazoLibroPrevio = '';
+    // Arco del marco de la ficha del libro: avance tecleado (el del input de
+    // NVO. AVANCE), igual que pintarMarcoAvance. Verde, 0-100%, sin vueltas.
+    function pintarMarcoLibro() {
+      const nuevo = Math.min(100, Math.max(0, Number($('newProgressInput').value) || 0));
+      trazoLibroPrevio = pintarMarcoSimetrico('libroCard', 'libroSvg', 'lArc', 'lArc2', nuevo / 100, trazoLibroPrevio);
     }
 
     // Dibuja el tramo [ini, fin] (fracciones 0..1 del perímetro)
@@ -1128,15 +1228,20 @@
       const pend = leerCola()
         .filter(x => x.bookTitle.toLowerCase() === titulo.toLowerCase())
         .reduce((a, x) => a + x.minutes, 0);
+      promDiaMin = m && typeof m.avgDaily === 'number' ? m.avgDaily : 0;
       if (!m && !pend) {
         $('kpiTotalMin').innerText = '-- min';
         $('kpiAvgDaily').innerText = '-- min';
         actualizarPaginasLibro();
+        pintarMarcoTotal();
+        pintarMarcoPromDia();
         return;
       }
       $('kpiTotalMin').innerText = formatearMin((m ? m.totalMinutes : 0) + pend);
       $('kpiAvgDaily').innerText = m ? formatearMin(m.avgDaily) : '-- min';
       actualizarPaginasLibro();
+      pintarMarcoTotal();
+      pintarMarcoPromDia();
     }
 
     async function loadMetrics() {
@@ -1144,6 +1249,9 @@
       if (!titulo) {
         $('kpiTotalMin').innerText = '0 min';
         $('kpiAvgDaily').innerText = '0 min';
+        promDiaMin = 0;
+        pintarMarcoTotal();
+        pintarMarcoPromDia();
         return;
       }
       const cache = lsGet('metricasCache', {});
@@ -1279,8 +1387,6 @@
       if (selectValue === '__NEW__') {
         $('newBookInputContainer').style.display = 'block';
         avanceActual = 0;
-        $('currentProgressText').innerText = '0%';
-        $('progressBarFill').style.width = '0%';
         $('newProgressInput').value = '0';
         $('totalPagesInput').value = '';
         $('kpiTotalMin').innerText = '0 min';
@@ -1307,22 +1413,18 @@
       const book = booksData.find(b => b.title === title);
       avanceActual = book ? book.progress : 0;
 
-      $('currentProgressText').innerText = avanceActual + '%';
-      $('progressBarFill').style.width = avanceActual + '%';
       $('newProgressInput').value = avanceActual;
       $('totalPagesInput').value = paginasTotalesDe(title) || '';
 
       previewAvance();
+      pintarMarcoLibro();
       actualizarGuardar();
       loadMetrics();
     }
 
     function previewAvance() {
-      const nuevo = Math.min(100, Math.max(0, Number($('newProgressInput').value) || 0));
-      const gain = $('progressBarGain');
-      gain.style.left = avanceActual + '%';
-      gain.style.width = Math.max(0, nuevo - avanceActual) + '%';
       pintarMarcoAvance();
+      pintarMarcoLibro();
       actualizarPaginasLibro();
     }
 
@@ -1972,6 +2074,9 @@
       const r = lsGet('resumenCache', {});
       $('ritmoAnio').textContent = r.anio || new Date().getFullYear();
       $('ritmoLibros').textContent = terminadosAnio() + ' / ' + metas.anual;
+      pintarMarcoMetaDiaria();
+      pintarMarcoMetaAnual();
+      pintarMarcoPromDia();
       pintarAnillo(elapsedSeconds());
     }
 
