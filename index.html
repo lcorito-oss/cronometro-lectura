@@ -74,10 +74,11 @@
     .progress-bar-fill { left: 0; width: 0%; background-color: var(--accent-green); }
     .progress-bar-gain { left: 0; width: 0%; background-color: var(--accent-gain); opacity: 0.55; }
     .progress-pill { background-color: rgba(0, 255, 136, 0.12); color: var(--accent-green); padding: 2px 8px; border-radius: 8px; font-weight: 700; font-size: 0.8rem; }
-    .progress-pages { font-size: 0.85rem; color: var(--text-primary); font-weight: 600; margin-top: 6px; }
-    .progress-falta { font-size: 0.85rem; color: var(--text-secondary); margin-top: 2px; }
-    .progress-falta b { color: var(--accent-green); }
+    .progress-pages { font-size: 0.75rem; color: var(--text-primary); font-weight: 600; margin-top: 6px; white-space: nowrap; cursor: pointer; }
+    .progress-pages .falta-txt { color: var(--text-secondary); font-weight: 400; }
+    .progress-pages b { color: var(--accent-green); }
     .total-pages-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary); }
+    .total-pages-row[hidden] { display: none; }
     .total-pages-row input { width: 76px; background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 4px 8px; text-align: center; font-size: 0.9rem; }
 
     .ring {
@@ -313,8 +314,7 @@
           <div class="progress-bar-fill" id="progressBarFill"></div>
           <div class="progress-bar-gain" id="progressBarGain"></div>
         </div>
-        <div class="progress-pages" id="progressPagesText" hidden></div>
-        <div class="progress-falta" id="progressFaltaText" hidden></div>
+        <div class="progress-pages" id="progressPagesText" hidden title="Toca para corregir el total de páginas"></div>
         <div class="total-pages-row" id="totalPagesRow" hidden>
           <label for="totalPagesInput">Páginas totales</label>
           <input type="number" id="totalPagesInput" min="1" inputmode="numeric" placeholder="—" aria-label="Páginas totales del libro">
@@ -536,6 +536,13 @@
         guardarPaginasTotales(getSelectedBookTitle(), Math.floor(Number($('totalPagesInput').value) || 0));
         actualizarPaginasLibro();
       });
+      // Tocar la línea de páginas vuelve a mostrar el campo para corregir el total;
+      // al salir del campo se vuelve a ocultar si ya hay total guardado.
+      $('progressPagesText').addEventListener('click', function() {
+        $('totalPagesRow').hidden = false;
+        $('totalPagesInput').focus();
+      });
+      $('totalPagesInput').addEventListener('blur', function() { actualizarPaginasLibro(); });
       $('midnightDialog').addEventListener('cancel', function(e) { e.preventDefault(); });
       $('midnightProgressInput').addEventListener('input', function() {
         if (medianochePendiente) {
@@ -1342,36 +1349,55 @@
       const leidas = Math.round(avanceActual / 100 * total);
       return leidas > 0 ? leidas / mins * 60 : 0;
     }
-    // Textos de páginas de la ficha del libro: "X / N págs leídas" y lo que falta para terminarlo.
+    // Textos de páginas de la ficha del libro en una sola línea:
+    // "X / N págs leídas · faltan M págs · ~H h MM min" (sin el tiempo si no hay ritmo;
+    // al 100%: "N / N págs leídas · ¡Libro terminado!").
+    // La fila de "Páginas totales" solo se muestra cuando el libro aún no tiene total guardado;
+    // una vez tecleado se oculta (y se vuelve a mostrar tocando la línea para corregir).
     function actualizarPaginasLibro() {
       const titulo = getSelectedBookTitle();
       const total = paginasTotalesDe(titulo);
       const esNuevo = $('bookSelect').value === '__NEW__';
-      $('totalPagesRow').hidden = esNuevo || !titulo;
-      const txtPag = $('progressPagesText'), txtFalta = $('progressFaltaText');
-      if (!titulo || esNuevo || !total) { txtPag.hidden = true; txtFalta.hidden = true; return; }
+      $('totalPagesRow').hidden = esNuevo || !titulo || (!!total && document.activeElement !== $('totalPagesInput'));
+      const txt = $('progressPagesText');
+      if (!titulo || esNuevo || !total) { txt.hidden = true; return; }
       const nuevo = Math.min(100, Math.max(0, Number($('newProgressInput').value) || 0));
       const leidas = Math.round(nuevo / 100 * total);
       const faltan = total - leidas;
-      txtPag.textContent = leidas + ' / ' + total + ' págs leídas';
-      txtPag.hidden = false;
-      txtFalta.textContent = '';
+      txt.textContent = '';
+      txt.appendChild(document.createTextNode(leidas + ' / ' + total + ' págs leídas'));
       if (nuevo >= 100) {
-        txtFalta.textContent = '¡Libro terminado!';
+        const b = document.createElement('b');
+        b.textContent = ' · ¡Libro terminado!';
+        txt.appendChild(b);
       } else {
-        const ritmo = paginasPorHora(titulo, total);
-        txtFalta.appendChild(document.createTextNode('faltan '));
+        const sep = document.createElement('span');
+        sep.className = 'falta-txt';
+        sep.textContent = ' · faltan ';
+        txt.appendChild(sep);
         const b = document.createElement('b');
         b.textContent = faltan + ' págs';
-        txtFalta.appendChild(b);
+        txt.appendChild(b);
+        const ritmo = paginasPorHora(titulo, total);
         if (ritmo > 0) {
           const horas = faltan / ritmo;
           let h = Math.floor(horas), min = Math.round((horas - h) * 60);
           if (min === 60) { h += 1; min = 0; }
-          txtFalta.appendChild(document.createTextNode(' · ~' + h + ' h ' + String(min).padStart(2, '0') + ' min'));
+          const t = document.createElement('span');
+          t.className = 'falta-txt';
+          t.textContent = ' · ~' + h + ' h ' + String(min).padStart(2, '0') + ' min';
+          txt.appendChild(t);
         }
       }
-      txtFalta.hidden = false;
+      txt.hidden = false;
+      // Que la línea quepa en una sola sin romperse (en móvil): si el texto es
+      // más ancho que la ficha (libros de 4 cifras), se achica un poco, sin bajar de 0.62rem.
+      txt.style.fontSize = '';
+      let tam = 0.75;
+      while (txt.scrollWidth > txt.clientWidth && tam > 0.62) {
+        tam = Math.round((tam - 0.02) * 100) / 100;
+        txt.style.fontSize = tam + 'rem';
+      }
     }
 
     function sumarAvance(n) {
