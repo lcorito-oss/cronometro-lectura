@@ -80,7 +80,7 @@
       padding: 3px;
       border-radius: 21px;
       margin-bottom: 14px;
-      background: #2b1d0f;
+      background: var(--input-bg);
       transition: padding 0.25s ease, margin 0.25s ease;
     }
     /* al correr, el anillo se engrosa hacia afuera (sin mover el contenido) */
@@ -91,8 +91,7 @@
     .ring-svg path { fill: none; stroke-linecap: butt; transition: stroke-dasharray 0.8s linear, stroke-dashoffset 0.8s linear, stroke-width 0.25s ease; }
     .ring-svg path.rb { stroke-linecap: round; }
     .ring-svg.sin-anim path { transition: none; }
-    #rTrack { stroke: #4a3421; }
-    #rEye { fill: #04210f; }
+    #rTrack { stroke: var(--border-color); }
     /* Marco verde de avance en la ficha "Nvo. avance": el marco completo es el 100% del libro */
     .input-group.marco-avance { position: relative; }
     .avance-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; overflow: visible; }
@@ -330,7 +329,6 @@
         <path class="rb" id="rB7" pathLength="100"/>
         <path class="rb" id="rB8" pathLength="100"/>
         <circle id="rHead" r="0"/>
-        <circle id="rEye" r="0"/>
       </svg>
     </div>
 
@@ -366,6 +364,7 @@
         </div>
         <svg class="avance-svg" id="avanceSvg" aria-hidden="true" preserveAspectRatio="none">
           <path id="aArc" pathLength="100"/>
+          <path id="aArc2" pathLength="100"/>
         </svg>
       </div>
     </div>
@@ -829,6 +828,8 @@
     let trazoAvancePrevio = '';
     // Marco verde de la ficha "Nvo. avance": el marco completo es el 100% del libro.
     // El arco muestra el nuevo avance (valor del input) y se actualiza en vivo con previewAvance().
+    // Crece simétrico desde la parte superior central en ambas direcciones (derecha e izquierda
+    // a la vez) y los dos extremos se encuentran en el centro inferior cuando llega al 100%.
     function pintarMarcoAvance() {
       const card = $('avanceCard');
       if (!card) return;
@@ -841,10 +842,13 @@
       const d = trazoMarco(W, H, g, 12 - g / 2);
       if (d !== trazoAvancePrevio) {
         $('aArc').setAttribute('d', d);
+        $('aArc2').setAttribute('d', d);
         trazoAvancePrevio = d;
       }
       const nuevo = Math.min(100, Math.max(0, Number($('newProgressInput').value) || 0));
-      tramo('aArc', 0, nuevo / 100, 'var(--accent-green)', g);
+      const mitad = nuevo / 100 / 2;
+      tramo('aArc', 0, mitad, 'var(--accent-green)', g);
+      tramo('aArc2', 1 - mitad, 1, 'var(--accent-green)', g);
     }
 
     // Dibuja el tramo [ini, fin] (fracciones 0..1 del perímetro)
@@ -940,28 +944,20 @@
         }
       }
 
-      // La cabeza del gusanito va en la punta delantera del arco, con un ojito mirando al frente.
+      // La cabeza del gusanito va en la punta delantera del arco.
       // (getPointAtLength mide en unidades reales del SVG, no en las 100 del pathLength.)
-      const head = $('rHead'), eye = $('rEye');
+      const head = $('rHead');
       if (vueltas >= 1 || cabeza > 0.005) {
         const camino = $('rTrack');
         const largoCamino = camino.getTotalLength();
         const p0 = camino.getPointAtLength(Math.max(0, Math.min(1, cabeza)) * largoCamino);
-        const p1 = camino.getPointAtLength(Math.max(0, Math.min(1, cabeza + 0.012)) * largoCamino);
         head.setAttribute('cx', p0.x);
         head.setAttribute('cy', p0.y);
         head.setAttribute('r', g + 2);
         head.style.display = '';
         head.style.fill = colorCabeza;
-        const dx = p1.x - p0.x, dy = p1.y - p0.y;
-        const dist = Math.hypot(dx, dy) || 1;
-        eye.setAttribute('cx', p0.x + dx / dist * 3);
-        eye.setAttribute('cy', p0.y + dy / dist * 3);
-        eye.setAttribute('r', 1.8);
-        eye.style.display = '';
       } else {
         head.style.display = 'none';
-        eye.style.display = 'none';
       }
 
       const cumplida = vueltas >= 1;
