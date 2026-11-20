@@ -422,7 +422,7 @@
     </div>
 
     <div class="input-group" id="paginaActualGroup" hidden>
-      <span class="selector-label" id="paginaActualLabel">Me quedé en la pág.</span>
+      <span class="selector-label" id="paginaActualLabel" title="Toca para cambiar el aparato en el que lees">Me quedé en la pág.</span>
       <div class="kindle-fields" role="group" aria-labelledby="paginaActualLabel">
         <input type="number" id="paginaActualInput" min="0" inputmode="numeric" aria-label="Página en la que me quedé">
         <span class="selector-label">pág.</span>
@@ -430,7 +430,7 @@
     </div>
 
     <div class="input-group" id="tiempoRestanteGroup">
-      <span class="selector-label" id="kindleLabel" aria-label="Tiempo restante, opcional">· T. Rest. ·</span>
+      <span class="selector-label" id="kindleLabel" aria-label="Tiempo restante, opcional" title="Toca para cambiar el aparato en el que lees">· T. Rest. ·</span>
       <div class="kindle-fields" id="kindleFields" role="group" aria-labelledby="kindleLabel">
         <input type="number" id="kindleHorasInput" min="0" inputmode="numeric" aria-label="Horas restantes">
         <span class="selector-label">h</span>
@@ -579,9 +579,13 @@
     // Formato del tiempo restante según el aparato en el que se lee:
     // Kobo solo horas (3,9 h), Kindle horas y minutos, libro físico por páginas.
     let formatoLectura = 'kindle';
+    let formatoElegido = false;   // en cuanto se elige un aparato, el selector se oculta
     try {
       const formatoGuardado = localStorage.getItem('formatoLectura');
-      if (formatoGuardado === 'kobo' || formatoGuardado === 'kindle' || formatoGuardado === 'fisico') formatoLectura = formatoGuardado;
+      if (formatoGuardado === 'kobo' || formatoGuardado === 'kindle' || formatoGuardado === 'fisico') {
+        formatoLectura = formatoGuardado;
+        formatoElegido = true;
+      }
     } catch (e) {}
     let avanceActual = 0;
     let sincronizando = false;
@@ -630,6 +634,7 @@
       const esKindle = formatoLectura === 'kindle';
       $('tiempoRestanteGroup').hidden = formatoLectura === 'fisico';
       $('paginaActualGroup').hidden = formatoLectura !== 'fisico';
+      $('formatoGroup').hidden = formatoElegido;
       $('kindleFields').hidden = !esKindle;
       $('koboFields').hidden = !esKobo;
       const grupoMedianoche = document.querySelector('.midnight-kindle-group');
@@ -641,9 +646,14 @@
     function setFormatoLectura(f) {
       if (f !== 'kobo' && f !== 'kindle' && f !== 'fisico') return;
       formatoLectura = f;
+      formatoElegido = true;
       try { localStorage.setItem('formatoLectura', f); } catch (e) {}
       aplicarFormatoLectura();
     }
+
+    // Vuelve a mostrar el selector de aparato para cambiarlo
+    // (se toca la etiqueta del tiempo restante o de la página).
+    function mostrarSelectorFormato() { $('formatoGroup').hidden = false; }
 
     function iniciar() {
       $('bookSelect').addEventListener('change', guardarEstado);
@@ -663,6 +673,8 @@
       });
       $('totalPagesInput').addEventListener('blur', function() { actualizarPaginasLibro(); });
       $('paginaActualInput').addEventListener('input', paginaActualAAvance);
+      $('kindleLabel').addEventListener('click', mostrarSelectorFormato);
+      $('paginaActualLabel').addEventListener('click', mostrarSelectorFormato);
       $('midnightDialog').addEventListener('cancel', function(e) { e.preventDefault(); });
       $('midnightProgressInput').addEventListener('input', function() {
         if (medianochePendiente) {
