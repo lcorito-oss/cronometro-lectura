@@ -163,6 +163,10 @@
     .btn-quick { flex: 0 0 auto; background: var(--card-bg); color: var(--accent-green); border: 1px solid var(--border-color); padding: 0; width: 36px; min-height: 36px; font-size: 0.8rem; border-radius: 10px; }
     .kindle-fields { display: flex; align-items: center; gap: 6px; }
     .kindle-fields input { width: 56px; background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 8px; text-align: center; }
+    .input-group[hidden], .kindle-fields[hidden] { display: none; }
+    .formato-fields { display: flex; gap: 6px; width: 100%; }
+    .btn-formato { flex: 1; background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 10px 6px; font-size: 0.85rem; border-radius: 10px; }
+    .btn-formato.activo { background: var(--accent-btn); color: #04210f; border-color: var(--accent-btn); }
     #kindleLabel { flex: 1; text-align: center; }
 
     button { padding: 14px; border: none; border-radius: 12px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: transform 0.1s ease, opacity 0.2s ease, filter 0.2s ease; }
@@ -408,13 +412,26 @@
       </div>
     </div>
 
-    <div class="input-group">
+    <div class="input-group" id="formatoGroup">
+      <span class="selector-label">Estoy leyendo en</span>
+      <div class="formato-fields" role="group" aria-label="Aparato de lectura">
+        <button type="button" class="btn-formato" data-formato="kobo" onclick="setFormatoLectura('kobo')">Kobo</button>
+        <button type="button" class="btn-formato" data-formato="kindle" onclick="setFormatoLectura('kindle')">Kindle</button>
+        <button type="button" class="btn-formato" data-formato="fisico" onclick="setFormatoLectura('fisico')">Físico</button>
+      </div>
+    </div>
+
+    <div class="input-group" id="tiempoRestanteGroup">
       <span class="selector-label" id="kindleLabel" aria-label="Tiempo restante, opcional">· T. Rest. ·</span>
-      <div class="kindle-fields" role="group" aria-labelledby="kindleLabel">
+      <div class="kindle-fields" id="kindleFields" role="group" aria-labelledby="kindleLabel">
         <input type="number" id="kindleHorasInput" min="0" inputmode="numeric" aria-label="Horas restantes">
         <span class="selector-label">h</span>
         <input type="number" id="kindleMinsInput" min="0" max="59" inputmode="numeric" aria-label="Minutos restantes">
         <span class="selector-label">min</span>
+      </div>
+      <div class="kindle-fields" id="koboFields" role="group" aria-labelledby="kindleLabel" hidden>
+        <input type="number" id="koboHorasInput" min="0" step="0.1" inputmode="decimal" aria-label="Horas restantes">
+        <span class="selector-label">h</span>
       </div>
     </div>
 
@@ -477,11 +494,15 @@
       <input id="midnightProgressInput" class="text-input midnight-progress-input" type="number" min="0" max="100" step="1" inputmode="numeric" required>
       <div class="input-group midnight-kindle-group">
         <span class="selector-label" id="midnightKindleLabel">Tiempo restante en el lector (opcional)</span>
-        <div class="kindle-fields" role="group" aria-labelledby="midnightKindleLabel">
+        <div class="kindle-fields" id="midnightKindleFields" role="group" aria-labelledby="midnightKindleLabel">
           <input type="number" id="midnightKindleHorasInput" min="0" inputmode="numeric" aria-label="Horas restantes">
           <span class="selector-label">h</span>
           <input type="number" id="midnightKindleMinsInput" min="0" max="59" inputmode="numeric" aria-label="Minutos restantes">
           <span class="selector-label">min</span>
+        </div>
+        <div class="kindle-fields" id="midnightKoboFields" role="group" aria-labelledby="midnightKindleLabel" hidden>
+          <input type="number" id="midnightKoboHorasInput" min="0" step="0.1" inputmode="decimal" aria-label="Horas restantes">
+          <span class="selector-label">h</span>
         </div>
       </div>
       <div class="confirm-actions">
@@ -547,12 +568,61 @@
     let estadoRestaurado = false;
     let guardando = false;
     let avisoDivision = '';   // mensaje de una sesión dividida, que muestra sincronizar() con el resultado
+    // Formato del tiempo restante según el aparato en el que se lee:
+    // Kobo solo horas (3,9 h), Kindle horas y minutos, libro físico por páginas.
+    let formatoLectura = 'kindle';
+    try {
+      const formatoGuardado = localStorage.getItem('formatoLectura');
+      if (formatoGuardado === 'kobo' || formatoGuardado === 'kindle' || formatoGuardado === 'fisico') formatoLectura = formatoGuardado;
+    } catch (e) {}
     let avanceActual = 0;
     let sincronizando = false;
     let minHoyGuardados = 0;   // minutos de hoy ya guardados (hoja + pendientes)
     let ultimoHoyVivo = -1;    // último "hoy" con la sesión en curso ya pintado en el ritmo
 
     const $ = id => document.getElementById(id);
+
+    // Texto del tiempo restante según el formato elegido, o '' si no se tecleó nada.
+    // Devuelve { texto, error }: Kobo "3,9 h", Kindle "3 h 54 min", físico ''.
+    function textoTiempoRestante(horasRaw, minutosRaw, koboRaw) {
+      if (formatoLectura === 'fisico') return { texto: '', error: '' };
+      if (formatoLectura === 'kobo') {
+        const crudo = String(koboRaw == null ? '' : koboRaw).trim().replace(',', '.');
+        if (crudo === '') return { texto: '', error: '' };
+        const h = Number(crudo);
+        if (!isFinite(h) || h < 0) return { texto: '', error: 'Revisa el tiempo restante: horas desde 0.' };
+        return { texto: crudo.replace('.', ',') + ' h', error: '' };
+      }
+      const hCrudo = String(horasRaw == null ? '' : horasRaw).trim();
+      const mCrudo = String(minutosRaw == null ? '' : minutosRaw).trim();
+      if (hCrudo === '' && mCrudo === '') return { texto: '', error: '' };
+      const h = Number(hCrudo || 0), m = Number(mCrudo || 0);
+      if (!isFinite(h) || !isFinite(m) || h < 0 || m < 0 || m > 59) return { texto: '', error: 'Revisa el tiempo restante: horas desde 0 y minutos entre 0 y 59.' };
+      return { texto: h + ' h ' + m + ' min', error: '' };
+    }
+
+    // Muestra los campos del tiempo restante según el aparato elegido.
+    function aplicarFormatoLectura() {
+      document.querySelectorAll('.btn-formato').forEach(function(b) {
+        b.classList.toggle('activo', b.getAttribute('data-formato') === formatoLectura);
+      });
+      const esKobo = formatoLectura === 'kobo';
+      const esKindle = formatoLectura === 'kindle';
+      $('tiempoRestanteGroup').hidden = formatoLectura === 'fisico';
+      $('kindleFields').hidden = !esKindle;
+      $('koboFields').hidden = !esKobo;
+      const grupoMedianoche = document.querySelector('.midnight-kindle-group');
+      if (grupoMedianoche) grupoMedianoche.hidden = formatoLectura === 'fisico';
+      $('midnightKindleFields').hidden = !esKindle;
+      $('midnightKoboFields').hidden = !esKobo;
+    }
+
+    function setFormatoLectura(f) {
+      if (f !== 'kobo' && f !== 'kindle' && f !== 'fisico') return;
+      formatoLectura = f;
+      try { localStorage.setItem('formatoLectura', f); } catch (e) {}
+      aplicarFormatoLectura();
+    }
 
     function iniciar() {
       $('bookSelect').addEventListener('change', guardarEstado);
@@ -578,15 +648,17 @@
           guardarEstado();
         }
       });
-      ['midnightKindleHorasInput', 'midnightKindleMinsInput'].forEach(function(id) {
+      ['midnightKindleHorasInput', 'midnightKindleMinsInput', 'midnightKoboHorasInput'].forEach(function(id) {
         $(id).addEventListener('input', function() {
           if (medianochePendiente) {
             medianochePendiente.kindleHoras = $('midnightKindleHorasInput').value;
             medianochePendiente.kindleMinutos = $('midnightKindleMinsInput').value;
+            medianochePendiente.koboHoras = $('midnightKoboHorasInput').value;
             guardarEstado();
           }
         });
       });
+      aplicarFormatoLectura();
       actualizarGuardar();
       actualizarPendientes();
       actualizarFallidas();
@@ -745,6 +817,8 @@
       medianochePendiente.progreso = input.value;
       $('midnightKindleHorasInput').value = medianochePendiente.kindleHoras || '';
       $('midnightKindleMinsInput').value = medianochePendiente.kindleMinutos || '';
+      $('midnightKoboHorasInput').value = medianochePendiente.koboHoras || '';
+      aplicarFormatoLectura();
       guardarEstado();
       dialog.showModal();
       input.focus();
@@ -773,18 +847,10 @@
         return;
       }
 
-      const kindleHorasRaw = String($('midnightKindleHorasInput').value).trim();
-      const kindleMinutosRaw = String($('midnightKindleMinsInput').value).trim();
-      let kindleFalta = '';
-      if (kindleHorasRaw !== '' || kindleMinutosRaw !== '') {
-        const horas = Number(kindleHorasRaw || 0);
-        const minutos = Number(kindleMinutosRaw || 0);
-        if (!isFinite(horas) || !isFinite(minutos) || horas < 0 || minutos < 0 || minutos > 59) {
-          alert('Revisa el tiempo restante: horas desde 0 y minutos entre 0 y 59.');
-          return;
-        }
-        kindleFalta = horas + ' h ' + minutos + ' min';
-      }
+      const restoMedianoche = textoTiempoRestante(
+        $('midnightKindleHorasInput').value, $('midnightKindleMinsInput').value, $('midnightKoboHorasInput').value);
+      if (restoMedianoche.error) { alert(restoMedianoche.error); return; }
+      const kindleFalta = restoMedianoche.texto;
 
       const pendiente = medianochePendiente;
       const cola = leerCola();
@@ -1803,17 +1869,9 @@
         if (!ok) return;
       }
 
-      const kH = $('kindleHorasInput').value.trim();
-      const kM = $('kindleMinsInput').value.trim();
-      let kindleFalta = '';
-      if (kH !== '' || kM !== '') {
-        const h = Number(kH || 0), m = Number(kM || 0);
-        if (isNaN(h) || isNaN(m) || h < 0 || m < 0 || m > 59) {
-          alert('Revisa el tiempo restante: horas desde 0 y minutos entre 0 y 59.');
-          return;
-        }
-        kindleFalta = h + ' h ' + m + ' min';
-      }
+      const resto = textoTiempoRestante($('kindleHorasInput').value, $('kindleMinsInput').value, $('koboHorasInput').value);
+      if (resto.error) { alert(resto.error); return; }
+      const kindleFalta = resto.texto;
 
       const sesion = {
         id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2),
@@ -1861,6 +1919,7 @@
       $('newBookTitleInput').value = '';
       $('kindleHorasInput').value = '';
       $('kindleMinsInput').value = '';
+      $('koboHorasInput').value = '';
       actualizarPendientes();
       renderRitmo();
       if (progress >= 100) mostrarFin(bookTitle, minutes);
