@@ -421,6 +421,14 @@
       </div>
     </div>
 
+    <div class="input-group" id="paginaActualGroup" hidden>
+      <span class="selector-label" id="paginaActualLabel">Me quedé en la pág.</span>
+      <div class="kindle-fields" role="group" aria-labelledby="paginaActualLabel">
+        <input type="number" id="paginaActualInput" min="0" inputmode="numeric" aria-label="Página en la que me quedé">
+        <span class="selector-label">pág.</span>
+      </div>
+    </div>
+
     <div class="input-group" id="tiempoRestanteGroup">
       <span class="selector-label" id="kindleLabel" aria-label="Tiempo restante, opcional">· T. Rest. ·</span>
       <div class="kindle-fields" id="kindleFields" role="group" aria-labelledby="kindleLabel">
@@ -601,6 +609,18 @@
       return { texto: h + ' h ' + m + ' min', error: '' };
     }
 
+    // Con libro físico, la página en la que te quedaste calcula el avance (%)
+    // con el total de páginas del libro.
+    function paginaActualAAvance() {
+      const pag = Number($('paginaActualInput').value);
+      const total = paginasTotalesDe(getSelectedBookTitle());
+      if (!isFinite(pag) || pag < 0 || !total) return;
+      $('newProgressInput').value = Math.min(100, Math.round(pag / total * 100));
+      previewAvance();
+      actualizarPaginasLibro();
+      actualizarGuardar();
+    }
+
     // Muestra los campos del tiempo restante según el aparato elegido.
     function aplicarFormatoLectura() {
       document.querySelectorAll('.btn-formato').forEach(function(b) {
@@ -609,6 +629,7 @@
       const esKobo = formatoLectura === 'kobo';
       const esKindle = formatoLectura === 'kindle';
       $('tiempoRestanteGroup').hidden = formatoLectura === 'fisico';
+      $('paginaActualGroup').hidden = formatoLectura !== 'fisico';
       $('kindleFields').hidden = !esKindle;
       $('koboFields').hidden = !esKobo;
       const grupoMedianoche = document.querySelector('.midnight-kindle-group');
@@ -641,6 +662,7 @@
         $('totalPagesInput').focus();
       });
       $('totalPagesInput').addEventListener('blur', function() { actualizarPaginasLibro(); });
+      $('paginaActualInput').addEventListener('input', paginaActualAAvance);
       $('midnightDialog').addEventListener('cancel', function(e) { e.preventDefault(); });
       $('midnightProgressInput').addEventListener('input', function() {
         if (medianochePendiente) {
@@ -1602,6 +1624,7 @@
 
     function handleBookSelectChange() {
       const selectValue = $('bookSelect').value;
+      $('paginaActualInput').value = '';
       if (selectValue === '__NEW__') {
         $('newBookInputContainer').style.display = 'block';
         avanceActual = 0;
@@ -1920,6 +1943,7 @@
       $('kindleHorasInput').value = '';
       $('kindleMinsInput').value = '';
       $('koboHorasInput').value = '';
+      $('paginaActualInput').value = '';
       actualizarPendientes();
       renderRitmo();
       if (progress >= 100) mostrarFin(bookTitle, minutes);
