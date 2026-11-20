@@ -645,15 +645,21 @@
 
     function setFormatoLectura(f) {
       if (f !== 'kobo' && f !== 'kindle' && f !== 'fisico') return;
+      if (isRunning || seconds > 0) return;   // fijado durante la sesión, como el libro
       formatoLectura = f;
       formatoElegido = true;
+      guardarFormatoLibro(getSelectedBookTitle(), f);
       try { localStorage.setItem('formatoLectura', f); } catch (e) {}
       aplicarFormatoLectura();
     }
 
     // Vuelve a mostrar el selector de aparato para cambiarlo
     // (se toca la etiqueta del tiempo restante o de la página).
-    function mostrarSelectorFormato() { $('formatoGroup').hidden = false; }
+    // Durante la sesión el aparato queda fijado, como el libro.
+    function mostrarSelectorFormato() {
+      if (isRunning || seconds > 0) { toast('El aparato queda fijado durante la sesión.'); return; }
+      $('formatoGroup').hidden = false;
+    }
 
     function iniciar() {
       $('bookSelect').addEventListener('change', guardarEstado);
@@ -1643,6 +1649,9 @@
         $('newProgressInput').value = '0';
         $('totalPagesInput').value = '';
         $('kpiTotalMin').innerText = '0 min';
+        // Libro nuevo: todavía no tiene aparato guardado, se muestra el selector.
+        formatoElegido = false;
+        aplicarFormatoLectura();
         $('kpiAvgDaily').innerText = '0 min';
         previewAvance();
         // Sin libro todavía no hay promedio: los arcos de TOTAL y PROM/DÍA van a 0,
@@ -1673,6 +1682,7 @@
 
       $('newProgressInput').value = avanceActual;
       $('totalPagesInput').value = paginasTotalesDe(title) || '';
+      aplicarFormatoLibro(title);
 
       previewAvance();
       pintarMarcoLibro();
@@ -1702,6 +1712,33 @@
       const mapa = leerPaginasTotales();
       if (n > 0) mapa[titulo] = Math.floor(n); else delete mapa[titulo];
       lsSet('paginasTotales', mapa);
+    }
+    // Aparato en el que se lee cada libro: queda fijado por libro, como las
+    // páginas totales (si empiezas en Kobo, terminas en Kobo).
+    function leerFormatosPorLibro() { return lsGet('formatosPorLibro', {}) || {}; }
+    function formatoDeLibro(titulo) {
+      if (!titulo) return '';
+      const f = leerFormatosPorLibro()[titulo];
+      return (f === 'kobo' || f === 'kindle' || f === 'fisico') ? f : '';
+    }
+    function guardarFormatoLibro(titulo, f) {
+      if (!titulo) return;
+      const mapa = leerFormatosPorLibro();
+      mapa[titulo] = f;
+      lsSet('formatosPorLibro', mapa);
+    }
+    // Al elegir un libro, el aparato es el que se guardó para ese libro;
+    // si el libro aún no tiene, se muestra el selector para elegirlo.
+    function aplicarFormatoLibro(titulo) {
+      const guardado = formatoDeLibro(titulo);
+      if (guardado) {
+        formatoLectura = guardado;
+        formatoElegido = true;
+      } else {
+        formatoElegido = false;
+      }
+      try { localStorage.setItem('formatoLectura', formatoLectura); } catch (e) {}
+      aplicarFormatoLectura();
     }
     // Ritmo en págs/hora: páginas leídas hasta el avance / minutos totales del libro.
     // Los minutos son los de metricas + las sesiones pendientes de enviar (igual que
