@@ -411,7 +411,7 @@
         <label class="selector-label" for="newProgressInput">Nvo. avance(%)</label>
         <div class="avance-row">
           <button type="button" class="btn-quick" onclick="sumarAvance(1)" aria-label="Sumar 1 por ciento">+1</button>
-          <input type="number" id="newProgressInput" min="0" max="100" inputmode="numeric">
+          <input type="number" id="newProgressInput" min="0" max="100" step="any" inputmode="numeric">
           <button type="button" class="btn-quick" onclick="sumarAvance(5)" aria-label="Sumar 5 por ciento">+5</button>
         </div>
         <svg class="avance-svg" id="avanceSvg" aria-hidden="true" preserveAspectRatio="none">
@@ -595,7 +595,7 @@
     const $ = id => document.getElementById(id);
 
     // Texto del tiempo restante según el formato elegido, o '' si no se tecleó nada.
-    // Devuelve { texto, error }: Kobo "3,9 h", Kindle "3 h 54 min", físico ''.
+    // Devuelve { texto, error }: Kobo (se teclean horas decimales, ej. 3,9) y Kindle se guardan como "3 h 54 min"; físico ''.
     function textoTiempoRestante(horasRaw, minutosRaw, koboRaw) {
       if (formatoLectura === 'fisico') return { texto: '', error: '' };
       if (formatoLectura === 'kobo') {
@@ -603,7 +603,9 @@
         if (crudo === '') return { texto: '', error: '' };
         const h = Number(crudo);
         if (!isFinite(h) || h < 0) return { texto: '', error: 'Revisa el tiempo restante: horas desde 0.' };
-        return { texto: crudo.replace('.', ',') + ' h', error: '' };
+        // Se guarda como "X h Y min", igual que Kindle, para que la columna ErrKindle del Excel lo lea.
+        const totalMin = Math.round(h * 60);
+        return { texto: Math.floor(totalMin / 60) + ' h ' + (totalMin % 60) + ' min', error: '' };
       }
       const hCrudo = String(horasRaw == null ? '' : horasRaw).trim();
       const mCrudo = String(minutosRaw == null ? '' : minutosRaw).trim();
@@ -619,7 +621,9 @@
       const pag = Number($('paginaActualInput').value);
       const total = paginasTotalesDe(getSelectedBookTitle());
       if (!isFinite(pag) || pag < 0 || !total) return;
-      $('newProgressInput').value = Math.min(100, Math.round(pag / total * 100));
+      // Dos decimales (17,99 % y no 18 %): con libro físico la página es exacta y Excel
+      // recupera así las páginas reales de la sesión en lugar de una aproximación.
+      $('newProgressInput').value = Math.min(100, Math.round(pag / total * 10000) / 100);
       previewAvance();
       actualizarPaginasLibro();
       actualizarGuardar();
