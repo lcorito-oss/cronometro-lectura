@@ -325,6 +325,15 @@
       </svg>
     </div>
 
+    <div class="input-group" id="formatoGroup">
+      <span class="selector-label">Estoy leyendo en</span>
+      <div class="formato-fields" role="group" aria-label="Aparato de lectura">
+        <button type="button" class="btn-formato" data-formato="kobo" onclick="setFormatoLectura('kobo')">Kobo</button>
+        <button type="button" class="btn-formato" data-formato="kindle" onclick="setFormatoLectura('kindle')">Kindle</button>
+        <button type="button" class="btn-formato" data-formato="fisico" onclick="setFormatoLectura('fisico')">Físico</button>
+      </div>
+    </div>
+
     <div class="ring" id="ring">
       <div class="timer-display" id="timerDisplay">
         <div class="digits" id="timer">00:00:00</div>
@@ -409,15 +418,6 @@
           <path id="aArc" pathLength="100"/>
           <path id="aArc2" pathLength="100"/>
         </svg>
-      </div>
-    </div>
-
-    <div class="input-group" id="formatoGroup">
-      <span class="selector-label">Estoy leyendo en</span>
-      <div class="formato-fields" role="group" aria-label="Aparato de lectura">
-        <button type="button" class="btn-formato" data-formato="kobo" onclick="setFormatoLectura('kobo')">Kobo</button>
-        <button type="button" class="btn-formato" data-formato="kindle" onclick="setFormatoLectura('kindle')">Kindle</button>
-        <button type="button" class="btn-formato" data-formato="fisico" onclick="setFormatoLectura('fisico')">Físico</button>
       </div>
     </div>
 
